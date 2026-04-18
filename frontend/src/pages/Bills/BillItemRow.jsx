@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Trash2, ChevronDown, ChevronUp, Info } from 'lucide-react';
+import { Trash2, ChevronDown, ChevronUp, Info, Loader2 } from 'lucide-react';
 import { Input, Select } from '../../components/ui/index.js';
 import { formatCurrency } from '../../utils/format.js';
 import useDebounce from '../../hooks/useDebounce.js';
 import * as catApi     from '../../api/categories.js';
 import * as prodApi    from '../../api/products.js';
 import * as pricingApi from '../../api/pricing.js';
+import cn from '../../utils/cn.js';
 
 // ─────────────────────────────────────────────────────────────
-// Pure helpers
+// Pure helpers  (unchanged logic)
 // ─────────────────────────────────────────────────────────────
 
 const canCalculate = (model, item) => {
@@ -23,24 +24,25 @@ const canCalculate = (model, item) => {
   }
 };
 
-/**
- * Instant sqft preview computed from local state — no API call needed.
- * Formula: MAX(w×h, minSqft) × qty  (mirrors calcAreaPrice on the backend)
- * Returns null when inputs are incomplete.
- */
 const buildLiveFormula = (item, minSqft = 1) => {
   if (item.pricingModel !== 'area_based') return null;
   const w = parseFloat(item.width);
   const h = parseFloat(item.height);
   const q = parseInt(item.quantity, 10);
   if (!w || !h || !q || w <= 0 || h <= 0 || q < 1) return null;
-
   const rawSqft   = parseFloat((w * h).toFixed(3));
   const unitSqft  = Math.max(rawSqft, parseFloat(minSqft));
   const totalSqft = parseFloat((unitSqft * q).toFixed(3));
-  const minNote   = rawSqft < parseFloat(minSqft) ? ` (min ${unitSqft} sqft/pc applied)` : '';
-
+  const minNote   = rawSqft < parseFloat(minSqft) ? ` (min ${unitSqft} sqft/pc)` : '';
   return `${w} × ${h} × ${q} = ${totalSqft} sqft${minNote}`;
+};
+
+// Left border color by pricing model
+const MODEL_STRIP = {
+  area_based:     'border-l-brand-500',
+  quantity_based: 'border-l-emerald-500',
+  fixed_charge:   'border-l-amber-500',
+  custom:         'border-l-violet-500',
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -50,31 +52,27 @@ const buildLiveFormula = (item, minSqft = 1) => {
 const BillItemRow = ({ item, index, onUpdate, onRemove }) => {
   const [expanded, setExpanded] = useState(false);
 
-  // Single field updater — keeps onUpdate calls consistent
   const u = (field, val) => onUpdate(item.id, { [field]: val });
 
-  // Debounced values fed into the server-side price query
   const dWidth     = useDebounce(item.width,     400);
   const dHeight    = useDebounce(item.height,    400);
   const dQty       = useDebounce(item.quantity,  400);
   const dUnitPrice = useDebounce(item.unitPrice, 400);
 
-  // ── Categories ─────────────────────────────────────────────
+  // ── Queries (unchanged) ───────────────────────────────────
   const { data: catData } = useQuery({
     queryKey:  ['categories'],
     queryFn:   catApi.getCategories,
     staleTime: Infinity,
   });
 
-  // ── Products filtered by category ─────────────────────────
   const { data: prodData } = useQuery({
-    queryKey: ['products', item.categoryId],
-    queryFn:  () => prodApi.getProducts({ category_id: item.categoryId, active_only: 'true' }),
-    enabled:  !!item.categoryId,
+    queryKey:  ['products', item.categoryId],
+    queryFn:   () => prodApi.getProducts({ category_id: item.categoryId, active_only: 'true' }),
+    enabled:   !!item.categoryId,
     staleTime: 30_000,
   });
 
-  // ── Pricing config when product changes ────────────────────
   const { data: configData } = useQuery({
     queryKey:  ['pricing-config', item.productId],
     queryFn:   () => pricingApi.getProductPricingConfig(item.productId),
@@ -82,7 +80,6 @@ const BillItemRow = ({ item, index, onUpdate, onRemove }) => {
     staleTime: 30_000,
   });
 
-  // Propagate pricing model to parent when product is first selected
   useEffect(() => {
     const model = configData?.data?.product?.pricingModel;
     if (model && model !== item.pricingModel) {
@@ -92,15 +89,13 @@ const BillItemRow = ({ item, index, onUpdate, onRemove }) => {
         sqft: null, itemTotal: 0, breakdown: '',
       });
     }
-  }, [configData]);  // eslint-disable-line
+  }, [configData]); // eslint-disable-line
 
-  // ── Server-side price calculation (debounced) ──────────────
   const calcReady = canCalculate(item.pricingModel, {
     ...item, width: dWidth, height: dHeight, quantity: dQty, unitPrice: dUnitPrice,
   });
 
   const { data: priceData, isFetching: calculating } = useQuery({
-    // Every input that affects price is in the key — guarantees recalculation
     queryKey: ['calc', item.productId, item.pricingModel, dWidth, dHeight, dQty, dUnitPrice],
     queryFn:  () => pricingApi.calculatePrice({
       productId:    Number(item.productId),
@@ -117,30 +112,28 @@ const BillItemRow = ({ item, index, onUpdate, onRemove }) => {
     retry:     false,
   });
 
-  // Propagate confirmed price result to parent
   useEffect(() => {
     if (!priceData?.data) return;
     const d = priceData.data;
     onUpdate(item.id, {
       itemTotal: d.itemTotal,
       unitPrice: d.unitPrice,
-      sqft:      d.sqft ?? null,   // now total sqft (w×h×qty) from backend
+      sqft:      d.sqft ?? null,
       breakdown: d.breakdown,
     });
-  }, [priceData]);  // eslint-disable-line
+  }, [priceData]); // eslint-disable-line
 
-  // ── Live formula — instant, no debounce, no API call ──────
-  const config  = configData?.data;
-  const tiers   = config?.tiers ?? [];
-  const minSqft = config?.activeRule?.min_sqft ?? 1;
-  const model   = item.pricingModel;
+  // ── Derived display values ────────────────────────────────
+  const config     = configData?.data;
+  const tiers      = config?.tiers ?? [];
+  const minSqft    = config?.activeRule?.min_sqft ?? 1;
+  const model      = item.pricingModel;
 
   const liveFormula = useMemo(
     () => buildLiveFormula(item, minSqft),
-    [item.pricingModel, item.width, item.height, item.quantity, minSqft]  // eslint-disable-line
+    [item.pricingModel, item.width, item.height, item.quantity, minSqft], // eslint-disable-line
   );
 
-  // ── Derived display values ─────────────────────────────────
   const categories = (catData?.data  || []).map((c) => ({ value: String(c.id), label: c.name }));
   const products   = (prodData?.data || []).map((p) => ({ value: String(p.id), label: p.name }));
 
@@ -148,16 +141,29 @@ const BillItemRow = ({ item, index, onUpdate, onRemove }) => {
                   + parseFloat(item.designFee  || 0)
                   + parseFloat(item.urgentFee  || 0);
 
-  // ── Render ─────────────────────────────────────────────────
+  const stripClass = MODEL_STRIP[model] || 'border-l-slate-200';
+
+  // ── Render ────────────────────────────────────────────────
   return (
-    <div className="border border-gray-200 rounded-xl bg-white shadow-sm overflow-hidden">
+    <div className={cn(
+      'border border-slate-200 border-l-4 rounded-xl bg-white shadow-sm overflow-hidden',
+      'hover:border-slate-300 hover:shadow-md transition-all duration-150',
+      stripClass,
+    )}>
 
       {/* ── Main row ── */}
-      <div className="grid grid-cols-12 gap-2 p-3 items-end">
+      <div className="grid grid-cols-12 gap-2 px-3 pt-3 pb-2.5 items-end">
 
-        {/* Row number */}
-        <div className="col-span-1 text-center">
-          <span className="text-xs font-bold text-gray-400 leading-8">{index + 1}</span>
+        {/* Row number badge */}
+        <div className="col-span-1 flex items-end justify-center pb-1">
+          <span className={cn(
+            'w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black shrink-0',
+            lineTotal > 0
+              ? 'bg-brand-100 text-brand-700'
+              : 'bg-slate-100 text-slate-400',
+          )}>
+            {index + 1}
+          </span>
         </div>
 
         {/* Category */}
@@ -190,8 +196,7 @@ const BillItemRow = ({ item, index, onUpdate, onRemove }) => {
           />
         </div>
 
-        {/* ── Dynamic inputs per pricing model ── */}
-
+        {/* Dynamic inputs by pricing model */}
         {model === 'area_based' && (
           <>
             <div className="col-span-1">
@@ -221,22 +226,12 @@ const BillItemRow = ({ item, index, onUpdate, onRemove }) => {
           </>
         )}
 
-        {model === 'quantity_based' && (
+        {(model === 'quantity_based' || model === 'fixed_charge') && (
           <div className="col-span-3">
             <Input
-              label={index === 0 ? 'Quantity (pcs)' : undefined}
-              type="number" min="1" step="1" placeholder="500"
-              value={item.quantity}
-              onChange={(e) => u('quantity', e.target.value)}
-            />
-          </div>
-        )}
-
-        {model === 'fixed_charge' && (
-          <div className="col-span-3">
-            <Input
-              label={index === 0 ? 'Quantity' : undefined}
-              type="number" min="1" step="1" placeholder="1"
+              label={index === 0 ? (model === 'quantity_based' ? 'Quantity (pcs)' : 'Quantity') : undefined}
+              type="number" min="1" step="1"
+              placeholder={model === 'quantity_based' ? '500' : '1'}
               value={item.quantity}
               onChange={(e) => u('quantity', e.target.value)}
             />
@@ -265,62 +260,65 @@ const BillItemRow = ({ item, index, onUpdate, onRemove }) => {
         )}
 
         {!model && (
-          <div className="col-span-3 text-xs text-gray-300 italic leading-8 px-1">
-            Select a product
+          <div className="col-span-3 text-xs text-slate-300 italic leading-9 px-1">
+            Select a product first
           </div>
         )}
 
-        {/* ── Price display ── */}
-        <div className="col-span-2 text-right">
+        {/* Amount */}
+        <div className="col-span-2 text-end">
           {index === 0 && (
-            <p className="text-xs font-semibold text-gray-500 mb-1">Amount</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Amount</p>
           )}
 
           {calculating ? (
-            <div className="h-6 bg-gray-100 rounded animate-pulse w-20 ml-auto" />
+            <div className="flex items-center justify-end gap-1.5 text-slate-400">
+              <Loader2 size={13} className="animate-spin" />
+              <span className="text-xs font-medium">calc…</span>
+            </div>
           ) : (
-            <p className={`text-base font-bold ${lineTotal > 0 ? 'text-indigo-700' : 'text-gray-300'}`}>
+            <p className={cn(
+              'text-base font-black leading-tight',
+              lineTotal > 0 ? 'text-brand-700' : 'text-slate-200',
+            )}>
               {lineTotal > 0 ? formatCurrency(lineTotal) : '—'}
             </p>
           )}
 
-          {/* Live sqft hint — shows immediately as user types */}
+          {/* Live sqft hint */}
           {liveFormula && !item.breakdown && (
-            <p className="text-xs text-gray-400 font-mono mt-0.5">{liveFormula}</p>
+            <p className="text-[10px] text-slate-400 font-mono mt-0.5 leading-tight">{liveFormula}</p>
           )}
-
-          {/* Confirmed sqft from server (after API resolves) */}
           {item.sqft && item.breakdown && (
-            <p className="text-xs text-indigo-400 font-medium mt-0.5">
-              {item.sqft} sqft total
-            </p>
+            <p className="text-[10px] text-brand-400 font-semibold mt-0.5">{item.sqft} sqft</p>
           )}
         </div>
 
         {/* Actions */}
-        <div className="col-span-1 flex items-center justify-end gap-1">
+        <div className="col-span-1 flex items-end justify-end gap-0.5 pb-0.5">
           <button
             type="button"
-            onClick={() => setExpanded((e) => !e)}
-            className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+            onClick={() => setExpanded((v) => !v)}
+            title={expanded ? 'Collapse' : 'Design / urgent fees'}
+            className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
           >
             {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
           <button
             type="button"
             onClick={() => onRemove(item.id)}
-            className="p-1.5 text-red-400 hover:text-red-600 rounded-lg hover:bg-red-50"
+            className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
           >
             <Trash2 size={14} />
           </button>
         </div>
       </div>
 
-      {/* ── Tier reference (quantity_based) ── */}
+      {/* ── Tier pills (quantity_based) ── */}
       {model === 'quantity_based' && tiers.length > 0 && (
-        <div className="px-3 pb-2 -mt-1">
+        <div className="px-3 pb-2.5 -mt-0.5">
           <div className="flex flex-wrap gap-1.5 items-center">
-            <Info size={11} className="text-gray-400" />
+            <Info size={10} className="text-slate-300" />
             {tiers.map((t) => {
               const label     = t.max_qty ? `${t.min_qty}–${t.max_qty} pcs` : `${t.min_qty}+ pcs`;
               const qty       = parseInt(item.quantity, 10);
@@ -328,11 +326,12 @@ const BillItemRow = ({ item, index, onUpdate, onRemove }) => {
               return (
                 <span
                   key={t.id}
-                  className={`text-xs px-2 py-0.5 rounded-full border ${
+                  className={cn(
+                    'text-[10px] px-2 py-0.5 rounded-full border font-medium',
                     isCurrent
-                      ? 'bg-indigo-100 border-indigo-300 text-indigo-700 font-semibold'
-                      : 'bg-gray-50 border-gray-200 text-gray-500'
-                  }`}
+                      ? 'bg-brand-50 border-brand-200 text-brand-700 font-semibold'
+                      : 'bg-slate-50 border-slate-200 text-slate-400',
+                  )}
                 >
                   {label} → {formatCurrency(t.price)}
                 </span>
@@ -342,16 +341,16 @@ const BillItemRow = ({ item, index, onUpdate, onRemove }) => {
         </div>
       )}
 
-      {/* ── Confirmed breakdown from server ── */}
+      {/* ── Breakdown hint ── */}
       {item.breakdown && (
-        <div className="px-3 pb-2 -mt-1">
-          <p className="text-xs text-gray-400 font-mono">{item.breakdown}</p>
+        <div className="px-3 pb-2 -mt-0.5">
+          <p className="text-[10px] text-slate-400 font-mono">{item.breakdown}</p>
         </div>
       )}
 
-      {/* ── Expanded: extra fees + description ── */}
+      {/* ── Expanded: design fee, urgent fee, description ── */}
       {expanded && (
-        <div className="border-t border-gray-100 bg-gray-50 px-3 py-3 grid grid-cols-3 gap-3">
+        <div className="border-t border-slate-100 bg-slate-50/70 px-3 py-3 grid grid-cols-3 gap-3">
           <Input
             label="Description (optional)"
             placeholder="Override product name on invoice"
@@ -372,7 +371,6 @@ const BillItemRow = ({ item, index, onUpdate, onRemove }) => {
           />
         </div>
       )}
-
     </div>
   );
 };

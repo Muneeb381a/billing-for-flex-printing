@@ -72,7 +72,7 @@ const BillTotals = ({
 
       {/* Advance payment controls */}
       {!readonly && (
-        <div className="flex gap-3 items-end p-4 bg-slate-50 rounded-2xl border border-slate-100">
+        <div className="grid grid-cols-2 gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
           <Input
             label="Advance Payment (PKR)"
             type="number" min="0" step="1"
@@ -80,14 +80,12 @@ const BillTotals = ({
             prefix="₨"
             value={advance}
             onChange={(e) => onAdvanceChange?.(e.target.value)}
-            wrapperClassName="flex-1"
           />
           <Select
             label="Payment Method"
             options={PAYMENT_METHODS}
             value={paymentMethod}
             onChange={(e) => onPaymentMethodChange?.(e.target.value)}
-            wrapperClassName="w-64"
           />
         </div>
       )}
