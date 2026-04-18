@@ -1,11 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Plus, Save, ArrowLeft, Trash2, UserPlus, FileText } from 'lucide-react';
+import { Plus, Save, ArrowLeft, Trash2, UserPlus, FileText, Hash, CheckCircle, XCircle, Loader } from 'lucide-react';
 import {
-  Input, Select, Textarea, Button, Card, CardHeader, PageHeader, Modal,
+  Input, Select, Textarea, Button, Card, PageHeader, Modal,
 } from '../../components/ui/index.js';
 import { formatCurrency } from '../../utils/format.js';
 import * as custApi from '../../api/customers.js';
@@ -31,6 +31,14 @@ const newItem = () => ({
   breakdown:    '',
 });
 
+// ── Bill Number Status Indicator ─────────────────────────────
+const BillNumberStatus = ({ status }) => {
+  if (status === 'checking') return <Loader size={14} className="animate-spin text-slate-400" />;
+  if (status === 'available') return <CheckCircle size={14} className="text-emerald-500" />;
+  if (status === 'taken')     return <XCircle size={14} className="text-red-500" />;
+  return null;
+};
+
 const BillForm = () => {
   const navigate = useNavigate();
   const qc       = useQueryClient();
@@ -42,6 +50,32 @@ const BillForm = () => {
   const [advance,       setAdvance]       = useState('');
   const [payMethod,     setPayMethod]     = useState('cash');
   const [quickCustOpen, setQuickCustOpen] = useState(false);
+
+  // ── Custom bill number state ────────────────────────────────
+  const [useCustomBillNo,  setUseCustomBillNo]  = useState(false);
+  const [customBillNo,     setCustomBillNo]     = useState('');
+  const [billNoStatus,     setBillNoStatus]     = useState('idle'); // idle | checking | available | taken
+  const debounceRef = useRef(null);
+
+  // Debounced uniqueness check
+  useEffect(() => {
+    if (!useCustomBillNo) { setBillNoStatus('idle'); return; }
+    const trimmed = customBillNo.trim();
+    if (!trimmed) { setBillNoStatus('idle'); return; }
+
+    setBillNoStatus('checking');
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await billApi.checkBillNumber(trimmed);
+        setBillNoStatus(res.available ? 'available' : 'taken');
+      } catch {
+        setBillNoStatus('idle');
+      }
+    }, 500);
+
+    return () => clearTimeout(debounceRef.current);
+  }, [customBillNo, useCustomBillNo]);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -92,6 +126,12 @@ const BillForm = () => {
   );
 
   const validateItems = () => {
+    if (useCustomBillNo) {
+      const trimmed = customBillNo.trim();
+      if (!trimmed)               return 'Bill number cannot be empty';
+      if (billNoStatus === 'taken')    return `Bill number "${trimmed}" already exists`;
+      if (billNoStatus === 'checking') return 'Wait — checking bill number availability…';
+    }
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
       if (!it.productId)     return `Row ${i + 1}: select a product`;
@@ -114,6 +154,8 @@ const BillForm = () => {
         notes:         formData.notes    || undefined,
         dueDate:       formData.dueDate  || undefined,
         billDate:      formData.billDate || undefined,
+        // Only send billNumber when custom mode is active
+        billNumber:    useCustomBillNo ? customBillNo.trim().toUpperCase() : undefined,
         discountType,
         discountValue: parseFloat(discountValue || 0),
         advance:       parseFloat(advance       || 0),
@@ -210,6 +252,67 @@ const BillForm = () => {
               </p>
             </div>
           )}
+
+          {/* ── Custom Bill Number Toggle ── */}
+          <div className="mt-4 pt-4 border-t border-slate-100">
+            <label className="flex items-center gap-2.5 cursor-pointer select-none w-fit group">
+              <div className="relative">
+                <input
+                  type="checkbox"
+                  checked={useCustomBillNo}
+                  onChange={(e) => {
+                    setUseCustomBillNo(e.target.checked);
+                    setCustomBillNo('');
+                    setBillNoStatus('idle');
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 rounded-full bg-slate-200 peer-checked:bg-brand-600 transition-colors duration-150" />
+                <div className="absolute top-0.5 start-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all duration-150 peer-checked:translate-x-4" />
+              </div>
+              <span className="text-sm font-semibold text-slate-700 group-hover:text-slate-900 transition-colors">
+                Enter custom bill number
+              </span>
+              <Hash size={13} className="text-slate-400" />
+            </label>
+
+            {useCustomBillNo && (
+              <div className="mt-3">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={customBillNo}
+                    onChange={(e) => setCustomBillNo(e.target.value.toUpperCase())}
+                    placeholder="e.g. AK-2024-55"
+                    maxLength={50}
+                    autoFocus
+                    className={`w-full max-w-xs px-4 py-2.5 pe-10 rounded-xl border text-sm font-mono font-semibold tracking-wide
+                      placeholder-slate-300 focus:outline-none focus:ring-2 focus:border-transparent transition-all duration-150
+                      ${billNoStatus === 'taken'
+                        ? 'border-red-400 focus:ring-red-400 bg-red-50 text-red-700'
+                        : billNoStatus === 'available'
+                        ? 'border-emerald-400 focus:ring-emerald-400 bg-emerald-50 text-emerald-800'
+                        : 'border-slate-300 hover:border-slate-400 focus:ring-brand-500 bg-white text-slate-900'
+                      }`}
+                  />
+                  <div className="absolute end-3 top-1/2 -translate-y-1/2">
+                    <BillNumberStatus status={billNoStatus} />
+                  </div>
+                </div>
+
+                <p className={`text-xs mt-1.5 font-medium ${
+                  billNoStatus === 'taken'     ? 'text-red-500' :
+                  billNoStatus === 'available' ? 'text-emerald-600' :
+                  'text-slate-400'
+                }`}>
+                  {billNoStatus === 'taken'     && `"${customBillNo}" is already used — choose a different number`}
+                  {billNoStatus === 'available' && `"${customBillNo}" is available`}
+                  {billNoStatus === 'checking'  && 'Checking availability…'}
+                  {billNoStatus === 'idle'      && 'Letters, numbers and dashes allowed (e.g. AK-2024-55)'}
+                </p>
+              </div>
+            )}
+          </div>
 
           <Textarea
             label="Notes (optional)"
@@ -342,6 +445,7 @@ const BillForm = () => {
             type="submit"
             icon={isSaving ? null : <Save size={15} />}
             loading={isSaving}
+            disabled={isSaving || (useCustomBillNo && billNoStatus === 'taken')}
             className="flex-1"
           >
             {isSaving ? 'Saving Bill…' : 'Create Bill'}

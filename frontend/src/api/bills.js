@@ -1,6 +1,7 @@
 import client from './client.js';
 
-export const getBills        = (params)         => client.get('/bills', { params });
+export const getBills          = (params)           => client.get('/bills', { params });
+export const checkBillNumber   = (value)            => client.get('/bills/check-bill-number', { params: { value } });
 export const getBill         = (id)             => client.get(`/bills/${id}`);
 export const getInvoice      = (id)             => client.get(`/bills/${id}/invoice`);
 export const createBill      = (data)           => client.post('/bills', data);

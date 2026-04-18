@@ -7,7 +7,10 @@ const router = Router();
 
 // ── Complete bill (atomic: items + charges + advance in one shot) ──
 // MUST be before /:id routes to avoid route shadowing
-router.post('/complete', validate(['customerId']), asyncWrap(ctrl.completeBill));
+router.post('/complete',            validate(['customerId']), asyncWrap(ctrl.completeBill));
+
+// Bill number availability check  (?value=AK-2024-55)
+router.get('/check-bill-number',    asyncWrap(ctrl.checkBillNumber));
 
 // Bills CRUD
 router.get('/',       asyncWrap(ctrl.getAll));

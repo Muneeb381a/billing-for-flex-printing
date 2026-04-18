@@ -75,6 +75,18 @@ const resolveItemPrice = async (productId, pricingModel, body) => {
   }
 };
 
+// ── Check bill number availability ────────────────────────────
+export const checkBillNumber = async (req, res) => {
+  const raw = (req.query.value ?? '').toString().trim().toUpperCase();
+  if (!raw) return res.json({ available: false, reason: 'empty' });
+
+  const { rows } = await pool.query(
+    `SELECT id FROM bills WHERE UPPER(bill_number) = $1 LIMIT 1`,
+    [raw]
+  );
+  res.json({ available: rows.length === 0 });
+};
+
 // ── CRUD ──────────────────────────────────────────────────────
 
 export const getAll = async (req, res) => {
@@ -215,7 +227,11 @@ export const completeBill = async (req, res, next) => {
     notes,
     dueDate,
     billDate,
+    billNumber: rawCustomBillNumber,
   } = req.body;
+
+  // Normalize custom bill number: trim + uppercase, treat blank as absent
+  const customBillNumber = rawCustomBillNumber?.toString().trim().toUpperCase() || null;
 
   if (!customerId)   return next(createError(400, 'customerId is required'));
   if (!items.length) return next(createError(400, 'At least one item is required'));
@@ -227,7 +243,7 @@ export const completeBill = async (req, res, next) => {
     // ── Query 1+2 (parallel): product configs + bill number ────────
     const productIds = [...new Set(items.map((it) => Number(it.productId)))];
 
-    const [{ rows: configs }, { rows: numRows }] = await Promise.all([
+    const [{ rows: configs }, billNumResult] = await Promise.all([
       client.query(
         `SELECT
            p.id, p.pricing_model,
@@ -251,8 +267,21 @@ export const completeBill = async (req, res, next) => {
          GROUP  BY p.id, p.pricing_model, pr.price_per_sqft, pr.min_sqft, pr.fixed_price`,
         [productIds]
       ),
-      client.query(`SELECT generate_bill_number() AS num`),
+      // Custom bill number: check uniqueness. Auto: generate from sequence.
+      customBillNumber
+        ? client.query(`SELECT id FROM bills WHERE UPPER(bill_number) = $1 LIMIT 1`, [customBillNumber])
+        : client.query(`SELECT generate_bill_number() AS num`),
     ]);
+
+    // Resolve final bill number (or reject duplicate)
+    let billNumber;
+    if (customBillNumber) {
+      if (billNumResult.rows.length > 0)
+        throw createError(409, `Bill number "${customBillNumber}" already exists`);
+      billNumber = customBillNumber;
+    } else {
+      billNumber = billNumResult.rows[0].num;
+    }
 
     const configMap = new Map(configs.map((c) => [c.id, c]));
 
@@ -310,7 +339,6 @@ export const completeBill = async (req, res, next) => {
     });
 
     // ── Query 3: create bill shell ─────────────────────────────────
-    const billNumber = numRows[0].num;
     const { rows: billRows } = await client.query(
       `INSERT INTO bills (bill_number, customer_id, discount_type, discount_value, notes, due_date, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7::date, NOW())) RETURNING *`,
