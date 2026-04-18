@@ -1,0 +1,34 @@
+import { Router } from 'express';
+import * as ctrl from '../controllers/bills.js';
+import { asyncWrap } from '../middleware/errorHandler.js';
+import { validate, validateId } from '../middleware/validate.js';
+
+const router = Router();
+
+// ── Complete bill (atomic: items + charges + advance in one shot) ──
+// MUST be before /:id routes to avoid route shadowing
+router.post('/complete', validate(['customerId']), asyncWrap(ctrl.completeBill));
+
+// Bills CRUD
+router.get('/',       asyncWrap(ctrl.getAll));
+router.get('/:id',    validateId, asyncWrap(ctrl.getById));
+router.get('/:id/invoice', validateId, asyncWrap(ctrl.getInvoice));
+router.post('/',      validate(['customerId']), asyncWrap(ctrl.create));
+router.put('/:id',    validateId, asyncWrap(ctrl.update));
+router.delete('/:id', validateId, asyncWrap(ctrl.remove));
+
+// Status & discount
+router.patch('/:id/status',   validateId, validate(['status']),        asyncWrap(ctrl.updateStatus));
+router.patch('/:id/deliver',  validateId,                              asyncWrap(ctrl.markDelivered));
+router.patch('/:id/discount', validateId,                              asyncWrap(ctrl.applyDiscount));
+
+// Bill items
+router.post('/:id/items',                 validateId, validate(['productId', 'pricingModel']), asyncWrap(ctrl.addItem));
+router.put('/:id/items/:itemId',          validateId, asyncWrap(ctrl.updateItem));
+router.delete('/:id/items/:itemId',       validateId, asyncWrap(ctrl.removeItem));
+
+// Extra charges
+router.post('/:id/extra-charges',         validateId, validate(['label', 'amount']), asyncWrap(ctrl.addExtraCharge));
+router.delete('/:id/extra-charges/:chargeId', validateId, asyncWrap(ctrl.removeExtraCharge));
+
+export default router;
