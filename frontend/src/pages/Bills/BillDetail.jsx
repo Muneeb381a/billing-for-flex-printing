@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
-  ArrowLeft, Printer, Plus, CreditCard, RefreshCw, Truck, AlertTriangle,
+  ArrowLeft, Printer, Plus, CreditCard, RefreshCw, Truck, AlertTriangle, MessageCircle,
 } from 'lucide-react';
 import {
   PageSpinner, Card, CardHeader, Table, Button, Select,
@@ -11,7 +11,8 @@ import {
 import { StatusBadge } from '../../components/ui/Badge.jsx';
 import { formatCurrency, formatDate, formatDateTime, PRICING_MODEL_LABELS } from '../../utils/format.js';
 import * as billApi from '../../api/bills.js';
-import AddPaymentModal from './AddPaymentModal.jsx';
+import AddPaymentModal  from './AddPaymentModal.jsx';
+import WhatsAppModal   from './WhatsAppModal.jsx';
 
 const STATUS_OPTIONS = [
   { value: 'pending',     label: 'Pending'      },
@@ -27,6 +28,7 @@ const BillDetail = () => {
   const qc       = useQueryClient();
 
   const [payModal, setPayModal] = useState(false);
+  const [waModal,  setWaModal]  = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['bill', id],
@@ -178,6 +180,14 @@ const BillDetail = () => {
           >
             Print
           </Button>
+          <button
+            type="button"
+            onClick={() => setWaModal(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-[#25D366] hover:bg-[#1ebe5d] active:bg-[#17a852] shadow-sm hover:shadow-md hover:shadow-[#25D366]/25 transition-all duration-150 cursor-pointer"
+          >
+            <MessageCircle size={13} />
+            WhatsApp
+          </button>
           {canAddPayment && (
             <Button size="sm" icon={<CreditCard size={14} />} onClick={() => setPayModal(true)}>
               Add Payment
@@ -318,6 +328,13 @@ const BillDetail = () => {
         isOpen={payModal}
         onClose={() => setPayModal(false)}
         bill={bill}
+      />
+
+      <WhatsAppModal
+        isOpen={waModal}
+        onClose={() => setWaModal(false)}
+        bill={bill}
+        billId={id}
       />
     </div>
   );

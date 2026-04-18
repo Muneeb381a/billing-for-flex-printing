@@ -65,6 +65,16 @@
 ::-webkit-scrollbar-track  { background: transparent; }
 ::-webkit-scrollbar-thumb  { background: #cbd5e1; border-radius: 3px; }
 
+/* ── Animations ─────────────────────────────────────────── */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@theme {
+  --animate-fade-in: fade-in 0.4s ease-out both;
+}
+
 /* ── Focus ring polish ──────────────────────────────────── */
 :focus-visible {
   outline: 2px solid #4f46e5;
