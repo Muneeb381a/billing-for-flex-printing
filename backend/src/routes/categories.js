@@ -5,10 +5,11 @@ import { validate, validateId } from '../middleware/validate.js';
 
 const router = Router();
 
-router.get('/',       asyncWrap(ctrl.getAll));
-router.get('/:id',    validateId, asyncWrap(ctrl.getById));
-router.post('/',      validate(['name']), asyncWrap(ctrl.create));
-router.put('/:id',    validateId, asyncWrap(ctrl.update));
-router.delete('/:id', validateId, asyncWrap(ctrl.remove));
+router.get('/',                               asyncWrap(ctrl.getAll));
+router.get('/:id',       validateId,          asyncWrap(ctrl.getById));
+router.post('/',         validate(['name']),   asyncWrap(ctrl.create));
+router.put('/:id',       validateId,          asyncWrap(ctrl.update));
+router.delete('/:id',    validateId,          asyncWrap(ctrl.remove));
+router.put('/:id/tiers', validateId,          asyncWrap(ctrl.replaceTiers));
 
 export default router;

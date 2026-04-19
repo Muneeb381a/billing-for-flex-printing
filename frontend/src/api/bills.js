@@ -19,5 +19,6 @@ export const deleteItem      = (id, itemId)     => client.delete(`/bills/${id}/i
 export const addExtraCharge  = (id, data)       => client.post(`/bills/${id}/extra-charges`, data);
 export const deleteExtraCharge = (id, chargeId) => client.delete(`/bills/${id}/extra-charges/${chargeId}`);
 
-export const duplicateBill   = (id)             => client.post(`/bills/${id}/duplicate`);
+export const duplicateBill    = (id)             => client.post(`/bills/${id}/duplicate`);
 export const bulkUpdateStatus = (ids, status)   => client.post('/bills/bulk-status', { ids, status });
+export const bulkDeleteBills  = (ids)           => client.delete('/bills/bulk', { data: { ids } });

@@ -19,14 +19,23 @@ export const getById = async (req, res, next) => {
   res.json({ data: rows[0], movements });
 };
 
+const toNum  = (v, fallback = 0)    => { const n = parseFloat(v); return isNaN(n) ? fallback : n; };
+const toNumN = (v, fallback = null) => { const n = parseFloat(v); return isNaN(n) ? fallback : n; };
+
 export const create = async (req, res) => {
   const { name, unit, currentStock, warningThreshold, criticalThreshold, reorderPoint, costPerUnit, supplierName, notes } = req.body;
   if (!name?.trim()) throw createError(400, 'name is required');
 
   const { rows } = await Q.create({
-    name: name.trim(), unit: unit || 'pcs',
-    currentStock, warningThreshold, criticalThreshold,
-    reorderPoint, costPerUnit, supplierName, notes,
+    name:              name.trim(),
+    unit:              unit || 'pcs',
+    currentStock:      toNum(currentStock, 0),
+    warningThreshold:  toNum(warningThreshold, 0),
+    criticalThreshold: toNum(criticalThreshold, 0),
+    reorderPoint:      toNum(reorderPoint, 0),
+    costPerUnit:       toNumN(costPerUnit),
+    supplierName:      supplierName || null,
+    notes:             notes        || null,
   });
   res.status(201).json({ data: rows[0] });
 };

@@ -14,14 +14,22 @@ export const getById = async (req, res, next) => {
 };
 
 export const create = async (req, res) => {
-  const { name, phone, email, address } = req.body;
-  const { rows } = await Q.create({ name: name.trim(), phone: phone.trim(), email, address });
+  const { name, phone, email, address, discountType, discountPercentage } = req.body;
+  const { rows } = await Q.create({
+    name: name.trim(), phone: phone.trim(), email, address,
+    discountType:       discountType       || 'normal',
+    discountPercentage: discountPercentage != null ? parseFloat(discountPercentage) : 0,
+  });
   res.status(201).json({ data: rows[0] });
 };
 
 export const update = async (req, res, next) => {
-  const { name, phone, email, address } = req.body;
-  const { rows } = await Q.update(req.params.id, { name, phone, email, address });
+  const { name, phone, email, address, discountType, discountPercentage } = req.body;
+  const { rows } = await Q.update(req.params.id, {
+    name, phone, email, address,
+    discountType,
+    discountPercentage: discountPercentage != null ? parseFloat(discountPercentage) : undefined,
+  });
   if (!rows.length) return next(createError(404, 'Customer not found'));
   res.json({ data: rows[0] });
 };

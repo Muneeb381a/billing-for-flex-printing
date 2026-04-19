@@ -210,7 +210,7 @@ export const getInvoice = async (req, res, next) => {
 // After:  7 queries max — batch product fetch, in-memory pricing, batch INSERT
 
 const ITEM_COLS = [
-  'bill_id', 'product_id', 'description', 'pricing_model',
+  'bill_id', 'product_id', 'category_id', 'description', 'pricing_model',
   'width', 'height', 'sqft', 'quantity',
   'unit_price', 'item_total', 'design_fee', 'urgent_fee',
   'notes', 'sort_order',
@@ -241,23 +241,17 @@ export const completeBill = async (req, res, next) => {
   try {
     await client.query('BEGIN');
 
-    // ── Query 1+2 (parallel): product configs + bill number ────────
-    const productIds = [...new Set(items.map((it) => Number(it.productId)))];
+    // ── Query 1+2 (parallel): product/category configs + bill number ──
+    const productIds  = [...new Set(items.filter(it => it.productId).map(it => Number(it.productId)))];
+    const categoryIds = [...new Set(items.filter(it => it.categoryId).map(it => Number(it.categoryId)))];
 
-    const [{ rows: configs }, billNumResult] = await Promise.all([
-      client.query(
-        `SELECT
-           p.id, p.pricing_model,
-           pr.price_per_sqft, pr.min_sqft, pr.fixed_price,
-           COALESCE(
-             json_agg(DISTINCT jsonb_build_object(
-               'id',      qt.id,
-               'min_qty', qt.min_qty,
-               'max_qty', qt.max_qty,
-               'price',   qt.price::text
-             )) FILTER (WHERE qt.id IS NOT NULL),
-             '[]'::json
-           ) AS tiers
+    const [{ rows: prodConfigs }, { rows: catConfigs }, billNumResult] = await Promise.all([
+      productIds.length ? client.query(
+        `SELECT p.id, p.pricing_model,
+                pr.price_per_sqft, pr.min_sqft, pr.fixed_price,
+                COALESCE(json_agg(DISTINCT jsonb_build_object(
+                  'id', qt.id, 'min_qty', qt.min_qty, 'max_qty', qt.max_qty, 'price', qt.price::text
+                )) FILTER (WHERE qt.id IS NOT NULL), '[]'::json) AS tiers
          FROM   products p
          LEFT   JOIN pricing_rules pr
                 ON  pr.product_id = p.id
@@ -267,12 +261,25 @@ export const completeBill = async (req, res, next) => {
          WHERE  p.id = ANY($1::int[])
          GROUP  BY p.id, p.pricing_model, pr.price_per_sqft, pr.min_sqft, pr.fixed_price`,
         [productIds]
-      ),
-      // Custom bill number: check uniqueness. Auto: generate from sequence.
+      ) : Promise.resolve({ rows: [] }),
+      categoryIds.length ? client.query(
+        `SELECT c.id, c.name, c.pricing_type, c.rate, c.unit, c.min_sqft,
+                COALESCE(json_agg(DISTINCT jsonb_build_object(
+                  'id', qt.id, 'min_qty', qt.min_qty, 'max_qty', qt.max_qty, 'price', qt.price::text
+                )) FILTER (WHERE qt.id IS NOT NULL), '[]'::json) AS tiers
+         FROM   categories c
+         LEFT   JOIN quantity_tiers qt ON qt.category_id = c.id
+         WHERE  c.id = ANY($1::int[])
+         GROUP  BY c.id`,
+        [categoryIds]
+      ) : Promise.resolve({ rows: [] }),
       customBillNumber
         ? client.query(`SELECT id FROM bills WHERE UPPER(bill_number) = $1 LIMIT 1`, [customBillNumber])
         : client.query(`SELECT generate_bill_number() AS num`),
     ]);
+
+    const prodConfigMap = new Map(prodConfigs.map((c) => [c.id,  c]));
+    const catConfigMap  = new Map(catConfigs.map((c)  => [c.id,  c]));
 
     // Resolve final bill number (or reject duplicate)
     let billNumber;
@@ -284,59 +291,88 @@ export const completeBill = async (req, res, next) => {
       billNumber = billNumResult.rows[0].num;
     }
 
-    const configMap = new Map(configs.map((c) => [c.id, c]));
-
     // ── Resolve ALL prices in memory — zero DB calls ────────────────
     const resolvedItems = items.map((item, sortOrder) => {
-      const cfg   = configMap.get(Number(item.productId));
-      if (!cfg) throw createError(404, `Product ${item.productId} not found`);
+      const isCategoryItem = !!item.categoryId;
+      let model, priced;
 
-      const model = item.pricingModel ?? cfg.pricing_model;
-      let priced;
+      if (isCategoryItem) {
+        const cat = catConfigMap.get(Number(item.categoryId));
+        if (!cat) throw createError(404, `Category ${item.categoryId} not found`);
+        model = cat.pricing_type;
 
-      switch (model) {
-        case 'area_based':
-          if (!cfg.price_per_sqft)
-            throw createError(422, `No active pricing rule for product ${item.productId}`);
-          priced = calcAreaPrice({
-            width:        item.width,
-            height:       item.height,
-            qty:          item.quantity ?? 1,
-            pricePerSqft: cfg.price_per_sqft,
-            minSqft:      cfg.min_sqft ?? 1,
-          });
-          break;
+        const normTiers = (cat.tiers || []).map((t) => ({
+          min_qty: Number(t.min_qty),
+          max_qty: t.max_qty != null ? Number(t.max_qty) : null,
+          price:   parseFloat(t.price),
+        }));
 
-        case 'quantity_based': {
-          const tiers = (cfg.tiers || []).map((t) => ({
-            id:      Number(t.id),
-            min_qty: Number(t.min_qty),
-            max_qty: t.max_qty != null ? Number(t.max_qty) : null,
-            price:   parseFloat(t.price),
-          }));
-          priced = resolveQuantityTier(tiers, item.quantity);
-          if (!priced)
-            throw createError(422, `No tier matches qty ${item.quantity} for product ${item.productId}`);
-          break;
+        switch (model) {
+          case 'area_based':
+            if (!cat.rate) throw createError(422, `Category "${cat.name}" has no rate configured`);
+            priced = calcAreaPrice({
+              width: item.width, height: item.height,
+              qty: item.quantity ?? 1,
+              pricePerSqft: parseFloat(cat.rate),
+              minSqft:      parseFloat(cat.min_sqft ?? 1),
+            });
+            break;
+          case 'quantity_based':
+            priced = resolveQuantityTier(normTiers, item.quantity);
+            if (!priced) throw createError(422, `No tier matches qty ${item.quantity} for "${cat.name}"`);
+            break;
+          case 'fixed_charge':
+            if (!cat.rate) throw createError(422, `Category "${cat.name}" has no rate configured`);
+            priced = calcFixedPrice({ fixedPrice: parseFloat(cat.rate), qty: item.quantity ?? 1 });
+            break;
+          case 'custom':
+            if (item.unitPrice == null) throw createError(400, 'unitPrice is required for custom pricing');
+            priced = calcCustomPrice({ unitPrice: item.unitPrice, qty: item.quantity ?? 1 });
+            break;
+          default:
+            throw createError(400, `Unknown pricing_type: ${model}`);
         }
+      } else {
+        const cfg = prodConfigMap.get(Number(item.productId));
+        if (!cfg) throw createError(404, `Product ${item.productId} not found`);
+        model = item.pricingModel ?? cfg.pricing_model;
 
-        case 'fixed_charge':
-          if (!cfg.fixed_price)
-            throw createError(422, `No active pricing rule for product ${item.productId}`);
-          priced = calcFixedPrice({ fixedPrice: cfg.fixed_price, qty: item.quantity ?? 1 });
-          break;
-
-        case 'custom':
-          if (item.unitPrice == null)
-            throw createError(400, 'unitPrice is required for custom pricing');
-          priced = calcCustomPrice({ unitPrice: item.unitPrice, qty: item.quantity ?? 1 });
-          break;
-
-        default:
-          throw createError(400, `Unknown pricingModel: ${model}`);
+        switch (model) {
+          case 'area_based':
+            if (!cfg.price_per_sqft)
+              throw createError(422, `No active pricing rule for product ${item.productId}`);
+            priced = calcAreaPrice({
+              width: item.width, height: item.height,
+              qty: item.quantity ?? 1,
+              pricePerSqft: cfg.price_per_sqft,
+              minSqft:      cfg.min_sqft ?? 1,
+            });
+            break;
+          case 'quantity_based': {
+            const tiers = (cfg.tiers || []).map((t) => ({
+              min_qty: Number(t.min_qty),
+              max_qty: t.max_qty != null ? Number(t.max_qty) : null,
+              price:   parseFloat(t.price),
+            }));
+            priced = resolveQuantityTier(tiers, item.quantity);
+            if (!priced) throw createError(422, `No tier matches qty ${item.quantity} for product ${item.productId}`);
+            break;
+          }
+          case 'fixed_charge':
+            if (!cfg.fixed_price)
+              throw createError(422, `No active pricing rule for product ${item.productId}`);
+            priced = calcFixedPrice({ fixedPrice: cfg.fixed_price, qty: item.quantity ?? 1 });
+            break;
+          case 'custom':
+            if (item.unitPrice == null) throw createError(400, 'unitPrice is required for custom pricing');
+            priced = calcCustomPrice({ unitPrice: item.unitPrice, qty: item.quantity ?? 1 });
+            break;
+          default:
+            throw createError(400, `Unknown pricingModel: ${model}`);
+        }
       }
 
-      return { item, model, priced, sortOrder };
+      return { item, model, priced, sortOrder, isCategoryItem };
     });
 
     // ── Query 3: create bill shell ─────────────────────────────────
@@ -352,9 +388,10 @@ export const completeBill = async (req, res, next) => {
     const itemPlaceholders = resolvedItems
       .map((_, i) => `(${ITEM_COLS.map((__, c) => `$${i * C + c + 1}`).join(', ')})`)
       .join(', ');
-    const itemParams = resolvedItems.flatMap(({ item, model, priced, sortOrder }) => [
+    const itemParams = resolvedItems.flatMap(({ item, model, priced, sortOrder, isCategoryItem }) => [
       bill.id,
-      Number(item.productId),
+      isCategoryItem ? null : Number(item.productId),
+      isCategoryItem ? Number(item.categoryId) : null,
       item.description ?? null,
       model,
       item.width  != null ? parseFloat(item.width)  : null,
@@ -535,6 +572,24 @@ export const remove = async (req, res, next) => {
     await client.query('DELETE FROM bills       WHERE id=$1',      [req.params.id]);
     await client.query('COMMIT');
     res.json({ message: 'Bill deleted', id: Number(req.params.id) });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+};
+
+// ── Bulk delete ───────────────────────────────────────────────
+export const bulkDelete = async (req, res, next) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || !ids.length) return next(createError(400, 'ids must be a non-empty array'));
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const deleted = await Q.bulkDelete(client, ids);
+    await client.query('COMMIT');
+    res.json({ deleted: deleted.length, ids: deleted.map((r) => r.id) });
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;

@@ -35,7 +35,7 @@ export const create = ({ name, unit, currentStock, warningThreshold, criticalThr
        (name, unit, current_stock, warning_threshold, critical_threshold, reorder_point, cost_per_unit, supplier_name, notes)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
      RETURNING *`,
-    [name, unit, currentStock ?? 0, warningThreshold ?? 150, criticalThreshold ?? 50, reorderPoint ?? 0, costPerUnit ?? null, supplierName ?? null, notes ?? null]
+    [name, unit, currentStock ?? 0, warningThreshold ?? 0, criticalThreshold ?? 0, reorderPoint ?? 0, costPerUnit ?? null, supplierName ?? null, notes ?? null]
   );
 
 export const update = (id, fields) =>

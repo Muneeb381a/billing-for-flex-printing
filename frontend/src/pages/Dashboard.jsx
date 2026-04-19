@@ -170,9 +170,12 @@ const Dashboard = () => {
 
   const shop     = settingsData?.data     ?? {};
   const s        = summary?.data          ?? {};
-  const alerts   = stockAlerts?.data?.data ?? [];
+  const alerts   = stockAlerts?.data ?? [];
   const critical  = alerts.filter((a) => a.alert_level === 'critical');
-  const billsToday = s.today_bill_count ?? 0;
+  const billsToday    = Number(s.today_bill_count)   || 0;
+  const billsThisMonth = Number(s.month_bill_count)  || 0;
+  const pendingCount  = Number(s.pending_count)      || 0;
+  const inProgCount   = Number(s.in_progress_count)  || 0;
 
   const monthExpenses  = parseFloat(expSummary?.data?.this_month || 0);
   const monthRevenue   = parseFloat(s.month_sales || 0);
@@ -231,7 +234,7 @@ const Dashboard = () => {
         <DStat
           title={t('this_month')}
           value={formatCurrency(s.month_sales)}
-          sub={`${s.month_bill_count ?? 0} ${t('bills_month')}`}
+          sub={`${billsThisMonth} ${t('bills_month')}`}
           icon={TrendingUp}
           palette="brand"
           loading={loadingSummary}
@@ -248,8 +251,8 @@ const Dashboard = () => {
         />
         <DStat
           title={t('active_orders_stat')}
-          value={(s.pending_count ?? 0) + (s.in_progress_count ?? 0)}
-          sub={`${s.pending_count ?? 0} ${t('pending_label')} · ${s.in_progress_count ?? 0} ${t('in_progress_label')}`}
+          value={pendingCount + inProgCount}
+          sub={`${pendingCount} ${t('pending_label')} · ${inProgCount} ${t('in_progress_label')}`}
           icon={Clock}
           palette="amber"
           loading={loadingSummary}

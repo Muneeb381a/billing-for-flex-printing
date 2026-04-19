@@ -1,11 +1,14 @@
 // ── Currency ─────────────────────────────────────────────────
 export const formatCurrency = (amount, currency = 'PKR') => {
   const n = parseFloat(amount ?? 0);
-  return `${currency} ${n.toLocaleString('en-PK', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  const safe = Number.isFinite(n) ? n : 0;
+  return `${currency} ${safe.toLocaleString('en-PK', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 };
 
-export const formatNumber = (n) =>
-  parseFloat(n ?? 0).toLocaleString('en-PK');
+export const formatNumber = (n) => {
+  const v = parseFloat(n ?? 0);
+  return (Number.isFinite(v) ? v : 0).toLocaleString('en-PK');
+};
 
 // ── Dates ─────────────────────────────────────────────────────
 export const formatDate = (dateStr) => {

@@ -24,6 +24,8 @@ const BillTotals = ({
   extraCharges   = [],
   discountType,
   discountValue,
+  isAutoDiscount = false,
+  customerName,
   advance        = 0,
   onDiscountTypeChange,
   onDiscountValueChange,
@@ -46,27 +48,35 @@ const BillTotals = ({
     <div className="space-y-3">
       {/* Discount controls */}
       {!readonly && (
-        <div className="flex gap-3 items-end p-4 bg-slate-50 rounded-2xl border border-slate-100">
-          <Select
-            label="Discount Type"
-            options={[
-              { value: 'fixed',      label: 'Fixed Amount (PKR)' },
-              { value: 'percentage', label: 'Percentage (%)' },
-            ]}
-            value={discountType}
-            onChange={(e) => onDiscountTypeChange?.(e.target.value)}
-            wrapperClassName="w-52"
-          />
-          <Input
-            label="Discount Value"
-            type="number" min="0" step="1"
-            placeholder="0"
-            suffix={discountType === 'percentage' ? '%' : undefined}
-            prefix={discountType === 'fixed' ? '₨' : undefined}
-            value={discountValue}
-            onChange={(e) => onDiscountValueChange?.(e.target.value)}
-            wrapperClassName="flex-1"
-          />
+        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-2">
+          {isAutoDiscount && customerName && (
+            <div className="flex items-center gap-2 text-[11px] text-emerald-700 font-semibold">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+              Auto-applied from {customerName}'s profile — edit below to override
+            </div>
+          )}
+          <div className="flex gap-3 items-end">
+            <Select
+              label="Discount Type"
+              options={[
+                { value: 'fixed',      label: 'Fixed Amount (PKR)' },
+                { value: 'percentage', label: 'Percentage (%)' },
+              ]}
+              value={discountType}
+              onChange={(e) => onDiscountTypeChange?.(e.target.value)}
+              wrapperClassName="w-52"
+            />
+            <Input
+              label="Discount Value"
+              type="number" min="0" step="0.5"
+              placeholder="0"
+              suffix={discountType === 'percentage' ? '%' : undefined}
+              prefix={discountType === 'fixed' ? '₨' : undefined}
+              value={discountValue}
+              onChange={(e) => onDiscountValueChange?.(e.target.value)}
+              wrapperClassName="flex-1"
+            />
+          </div>
         </div>
       )}
 
@@ -104,7 +114,11 @@ const BillTotals = ({
 
         {discountAmount > 0 && (
           <Row
-            label={`Discount (${discountType === 'percentage' ? `${discountValue}%` : 'fixed'})`}
+            label={
+              discountType === 'percentage'
+                ? `Discount Applied (${parseFloat(discountValue || 0)}%)`
+                : 'Discount Applied (fixed)'
+            }
             value={`− ${formatCurrency(discountAmount)}`}
             color="text-emerald-600"
           />

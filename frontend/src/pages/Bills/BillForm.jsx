@@ -33,10 +33,10 @@ const PREDEFINED_CHARGES = [
 
 const newItem = () => ({
   id: crypto.randomUUID(),
-  categoryId: '', subcategoryId: '', productId: '', pricingModel: '',
+  categoryId: '',
   description: '', width: '', height: '',
   quantity: 1, unitPrice: '', sqft: null,
-  itemTotal: 0, designFee: 0, urgentFee: 0, breakdown: '',
+  itemTotal: 0, designFee: 0, urgentFee: 0,
 });
 
 const BillNumberStatus = ({ status }) => {
@@ -50,13 +50,14 @@ const BillForm = () => {
   const navigate = useNavigate();
   const qc       = useQueryClient();
 
-  const [items,         setItems]         = useState([newItem()]);
-  const [extraCharges,  setExtraCharges]  = useState([]);
-  const [discountType,  setDiscountType]  = useState('fixed');
-  const [discountValue, setDiscountValue] = useState('');
-  const [advance,       setAdvance]       = useState('');
-  const [payMethod,     setPayMethod]     = useState('cash');
-  const [quickCustOpen, setQuickCustOpen] = useState(false);
+  const [items,            setItems]            = useState([newItem()]);
+  const [extraCharges,     setExtraCharges]     = useState([]);
+  const [discountType,     setDiscountType]     = useState('fixed');
+  const [discountValue,    setDiscountValue]    = useState('');
+  const [isAutoDiscount,   setIsAutoDiscount]   = useState(false);
+  const [advance,          setAdvance]          = useState('');
+  const [payMethod,        setPayMethod]        = useState('cash');
+  const [quickCustOpen,    setQuickCustOpen]    = useState(false);
 
   // Custom bill number
   const [useCustomBillNo, setUseCustomBillNo] = useState(false);
@@ -142,6 +143,22 @@ const BillForm = () => {
 
   const selectedCustomer = (custData?.data || []).find((c) => String(c.id) === selectedCustomerId);
 
+  // Auto-apply (or clear) customer discount whenever the selected customer changes
+  useEffect(() => {
+    const pct = parseFloat(selectedCustomer?.discount_percentage || 0);
+    const isRegular = selectedCustomer?.discount_type === 'regular' && pct > 0;
+
+    if (isRegular) {
+      setDiscountType('percentage');
+      setDiscountValue(String(pct));
+      setIsAutoDiscount(true);
+    } else {
+      setDiscountType('fixed');
+      setDiscountValue('');
+      setIsAutoDiscount(false);
+    }
+  }, [selectedCustomerId]); // eslint-disable-line
+
   // ── Validation ────────────────────────────────────────────────
   const validateItems = () => {
     if (useCustomBillNo) {
@@ -152,8 +169,8 @@ const BillForm = () => {
     }
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
-      if (!it.productId)     return `Row ${i + 1}: select a product`;
-      if (it.itemTotal <= 0) return `Row ${i + 1}: price hasn't calculated — check inputs`;
+      if (!it.categoryId)    return `Row ${i + 1}: select an item`;
+      if (it.itemTotal <= 0) return `Row ${i + 1}: enter dimensions / quantity to calculate price`;
     }
     for (const ec of extraCharges) {
       if (!ec.label)  return 'Extra charge label is required';
@@ -169,7 +186,6 @@ const BillForm = () => {
       return billApi.completeBill({
         customerId:    Number(formData.customerId),
         notes:         formData.notes    || undefined,
-        dueDate:       formData.dueDate  || undefined,
         billDate:      formData.billDate || undefined,
         billNumber:    useCustomBillNo ? customBillNo.trim().toUpperCase() : undefined,
         discountType,
@@ -177,8 +193,7 @@ const BillForm = () => {
         advance:       parseFloat(advance || 0),
         paymentMethod: payMethod,
         items: items.map((it) => ({
-          productId:    Number(it.productId),
-          pricingModel: it.pricingModel,
+          categoryId:   Number(it.categoryId),
           description:  it.description || undefined,
           width:        it.width  ? parseFloat(it.width)  : undefined,
           height:       it.height ? parseFloat(it.height) : undefined,
@@ -236,7 +251,7 @@ const BillForm = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="flex gap-2 items-end">
                   <Select
                     label="Customer"
@@ -258,16 +273,20 @@ const BillForm = () => {
                   </button>
                 </div>
                 <Input label="Bill Date" type="date" {...register('billDate')} />
-                <Input label="Due Date (optional)" type="date" {...register('dueDate')} />
               </div>
 
               {selectedCustomer && (
                 <div className="mt-3 flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-100 rounded-xl">
                   <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                  <p className="text-xs font-medium text-emerald-700">
+                  <p className="text-xs font-medium text-emerald-700 flex-1">
                     {selectedCustomer.name} · {selectedCustomer.phone}
                     {selectedCustomer.address && ` · ${selectedCustomer.address}`}
                   </p>
+                  {isAutoDiscount && (
+                    <span className="shrink-0 px-2 py-0.5 bg-emerald-200 text-emerald-800 rounded-lg text-[10px] font-bold whitespace-nowrap">
+                      {parseFloat(selectedCustomer.discount_percentage)}% auto-discount
+                    </span>
+                  )}
                 </div>
               )}
 
@@ -533,10 +552,12 @@ const BillForm = () => {
                   extraCharges={extraCharges}
                   discountType={discountType}
                   discountValue={discountValue}
+                  isAutoDiscount={isAutoDiscount}
+                  customerName={isAutoDiscount ? selectedCustomer?.name : undefined}
                   advance={advance}
                   paymentMethod={payMethod}
-                  onDiscountTypeChange={setDiscountType}
-                  onDiscountValueChange={setDiscountValue}
+                  onDiscountTypeChange={(v) => { setDiscountType(v); setIsAutoDiscount(false); }}
+                  onDiscountValueChange={(v) => { setDiscountValue(v); setIsAutoDiscount(false); }}
                   onAdvanceChange={setAdvance}
                   onPaymentMethodChange={setPayMethod}
                 />

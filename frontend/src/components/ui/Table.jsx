@@ -8,7 +8,7 @@ const Table = ({
   loading       = false,
   emptyMessage  = 'No data found',
   emptyIcon,
-  keyExtractor  = (row) => row.id,
+  keyExtractor  = (row, i) => row.id ?? row._id ?? i,
   onRowClick,
   className,
 }) => {
@@ -40,9 +40,9 @@ const Table = ({
               </td>
             </tr>
           ) : (
-            data.map((row) => (
+            data.map((row, i) => (
               <tr
-                key={keyExtractor(row)}
+                key={keyExtractor(row, i)}
                 onClick={() => onRowClick?.(row)}
                 className={cn(
                   'transition-colors duration-100',

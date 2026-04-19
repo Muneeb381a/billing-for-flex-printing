@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Plus, Trash2, Search, SlidersHorizontal, CheckSquare, X, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, Search, SlidersHorizontal, CheckSquare, X } from 'lucide-react';
 import {
   PageHeader, Table, ConfirmDialog, Button, Select, Input,
 } from '../../components/ui/index.js';
@@ -32,8 +32,9 @@ const Bills = () => {
   const [statusFilter,  setStatusFilter]  = useState('');
   const [selected,      setSelected]      = useState(null);
   const [confirmOpen,   setConfirmOpen]   = useState(false);
-  const [checkedIds,    setCheckedIds]    = useState(new Set());
-  const [bulkStatus,    setBulkStatus]    = useState('');
+  const [checkedIds,         setCheckedIds]         = useState(new Set());
+  const [bulkStatus,         setBulkStatus]         = useState('');
+  const [bulkDeleteConfirm,  setBulkDeleteConfirm]  = useState(false);
 
   const debouncedSearch = useDebounce(search, 350);
 
@@ -65,6 +66,18 @@ const Bills = () => {
       setBulkStatus('');
     },
     onError: (err) => toast.error(err.response?.data?.error || 'Bulk update failed'),
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids) => api.bulkDeleteBills(ids),
+    onSuccess:  (res) => {
+      qc.invalidateQueries({ queryKey: ['bills'] });
+      toast.success(`${res.data.deleted} bill${res.data.deleted !== 1 ? 's' : ''} deleted`);
+      setCheckedIds(new Set());
+      setBulkStatus('');
+      setBulkDeleteConfirm(false);
+    },
+    onError: (err) => toast.error(err.response?.data?.error || 'Bulk delete failed'),
   });
 
   const bills = data?.data || [];
@@ -248,16 +261,21 @@ const Bills = () => {
             onChange={(e) => setBulkStatus(e.target.value)}
             className="w-48"
           />
-          <Button
-            size="sm"
-            loading={bulkMutation.isPending}
-            onClick={applyBulkStatus}
-          >
+          <Button size="sm" loading={bulkMutation.isPending} onClick={applyBulkStatus}>
             Apply
+          </Button>
+          <Button
+            size="sm" variant="ghost"
+            icon={<Trash2 size={13} />}
+            loading={bulkDeleteMutation.isPending}
+            onClick={() => setBulkDeleteConfirm(true)}
+            className="text-red-500 hover:bg-red-50 border border-red-200"
+          >
+            Delete
           </Button>
           <button
             onClick={() => { setCheckedIds(new Set()); setBulkStatus(''); }}
-            className="p-1 rounded-lg text-indigo-400 hover:text-indigo-700 hover:bg-indigo-100 transition-colors"
+            className="p-1 rounded-lg text-indigo-400 hover:text-indigo-700 hover:bg-indigo-100 transition-colors cursor-pointer"
           >
             <X size={15} />
           </button>
@@ -282,6 +300,15 @@ const Bills = () => {
         loading={deleteMutation.isPending}
         title={`Delete ${selected?.bill_number}?`}
         message="This permanently deletes the bill and all its items. Payments already recorded will also be removed."
+      />
+
+      <ConfirmDialog
+        isOpen={bulkDeleteConfirm}
+        onClose={() => setBulkDeleteConfirm(false)}
+        onConfirm={() => bulkDeleteMutation.mutate([...checkedIds])}
+        loading={bulkDeleteMutation.isPending}
+        title={`Delete ${checkedIds.size} bill${checkedIds.size !== 1 ? 's' : ''}?`}
+        message="This permanently deletes all selected bills and their items. This cannot be undone."
       />
     </div>
   );

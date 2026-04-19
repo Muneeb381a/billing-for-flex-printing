@@ -37,14 +37,16 @@ export const findByIdWithItems = async (id) => {
       [id]
     ),
     pool.query(
-      `SELECT bi.id, bi.bill_id, bi.product_id, bi.description, bi.pricing_model,
+      `SELECT bi.id, bi.bill_id, bi.product_id, bi.category_id, bi.description, bi.pricing_model,
               bi.width, bi.height, bi.sqft, bi.quantity,
               bi.unit_price, bi.item_total, bi.design_fee, bi.urgent_fee,
               bi.notes AS item_notes, bi.sort_order, bi.created_at,
-              p.name AS product_name, cat.name AS category_name
+              COALESCE(direct_cat.name, p.name) AS product_name,
+              COALESCE(direct_cat.name, parent_cat.name) AS category_name
        FROM   bill_items bi
-       JOIN   products p   ON p.id   = bi.product_id
-       JOIN   categories cat ON cat.id = p.category_id
+       LEFT JOIN products p       ON p.id   = bi.product_id
+       LEFT JOIN categories parent_cat ON parent_cat.id = p.category_id
+       LEFT JOIN categories direct_cat ON direct_cat.id = bi.category_id
        WHERE  bi.bill_id = $1
        ORDER  BY bi.sort_order, bi.id`,
       [id]
@@ -142,6 +144,15 @@ export const duplicate = async (client, sourceId, newBillNumber) => {
   return billRows[0];
 };
 
+// ── Bulk delete ───────────────────────────────────────────────
+export const bulkDelete = async (client, ids) => {
+  await client.query(`DELETE FROM payments          WHERE bill_id = ANY($1::int[])`, [ids]);
+  await client.query(`DELETE FROM bill_extra_charges WHERE bill_id = ANY($1::int[])`, [ids]);
+  await client.query(`DELETE FROM bill_items         WHERE bill_id = ANY($1::int[])`, [ids]);
+  const { rows } = await client.query(`DELETE FROM bills WHERE id = ANY($1::int[]) RETURNING id`, [ids]);
+  return rows;
+};
+
 // ── Bulk status ───────────────────────────────────────────────
 export const bulkUpdateStatus = (ids, status) => {
   if (status === 'delivered') {
@@ -173,24 +184,25 @@ export const getItems = (billId) =>
 export const addItem = (client, billId, item) =>
   client.query(
     `INSERT INTO bill_items
-       (bill_id, product_id, description, pricing_model, width, height, sqft, quantity, unit_price, item_total, design_fee, urgent_fee, notes, sort_order)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+       (bill_id, product_id, category_id, description, pricing_model, width, height, sqft, quantity, unit_price, item_total, design_fee, urgent_fee, notes, sort_order)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
      RETURNING *`,
     [
       billId,
-      item.productId,
-      item.description    ?? null,
+      item.productId   ?? null,
+      item.categoryId  ?? null,
+      item.description ?? null,
       item.pricingModel,
-      item.width          ?? null,
-      item.height         ?? null,
-      item.sqft           ?? null,
-      item.quantity       ?? 1,
+      item.width       ?? null,
+      item.height      ?? null,
+      item.sqft        ?? null,
+      item.quantity    ?? 1,
       item.unitPrice,
       item.itemTotal,
-      item.designFee      ?? 0,
-      item.urgentFee      ?? 0,
-      item.notes          ?? null,
-      item.sortOrder      ?? 0,
+      item.designFee   ?? 0,
+      item.urgentFee   ?? 0,
+      item.notes       ?? null,
+      item.sortOrder   ?? 0,
     ]
   );
 

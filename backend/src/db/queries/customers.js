@@ -3,7 +3,7 @@ import pool from '../../config/db.js';
 export const findAll = ({ search = '', limit = 50, offset = 0 } = {}) => {
   const term = `%${search}%`;
   return pool.query(
-    `SELECT id, name, phone, email, address, created_at
+    `SELECT id, name, phone, email, address, discount_type, discount_percentage, created_at
      FROM   customers
      WHERE  ($1 = '' OR name ILIKE $1 OR phone ILIKE $1)
      ORDER  BY name ASC
@@ -14,30 +14,32 @@ export const findAll = ({ search = '', limit = 50, offset = 0 } = {}) => {
 
 export const findById = (id) =>
   pool.query(
-    `SELECT id, name, phone, email, address, created_at, updated_at
+    `SELECT id, name, phone, email, address, discount_type, discount_percentage, created_at, updated_at
      FROM   customers
      WHERE  id = $1`,
     [id]
   );
 
-export const create = ({ name, phone, email = null, address = null }) =>
+export const create = ({ name, phone, email = null, address = null, discountType = 'normal', discountPercentage = 0 }) =>
   pool.query(
-    `INSERT INTO customers (name, phone, email, address)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO customers (name, phone, email, address, discount_type, discount_percentage)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
-    [name, phone, email, address]
+    [name, phone, email, address, discountType, discountPercentage]
   );
 
-export const update = (id, { name, phone, email, address }) =>
+export const update = (id, { name, phone, email, address, discountType, discountPercentage }) =>
   pool.query(
     `UPDATE customers
-     SET    name    = COALESCE($2, name),
-            phone   = COALESCE($3, phone),
-            email   = COALESCE($4, email),
-            address = COALESCE($5, address)
+     SET    name                = COALESCE($2, name),
+            phone               = COALESCE($3, phone),
+            email               = COALESCE($4, email),
+            address             = COALESCE($5, address),
+            discount_type       = COALESCE($6, discount_type),
+            discount_percentage = COALESCE($7, discount_percentage)
      WHERE  id = $1
      RETURNING *`,
-    [id, name, phone, email, address]
+    [id, name, phone, email, address, discountType, discountPercentage]
   );
 
 export const remove = (id) =>

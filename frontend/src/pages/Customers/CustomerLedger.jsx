@@ -426,7 +426,7 @@ const CustomerLedger = () => {
           <p className="text-sm text-red-700">
             <span className="font-semibold">{overdueCount} overdue bill{overdueCount > 1 ? 's' : ''}</span>
             {' '}— {formatCurrency(
-              bills.filter((b) => b.is_overdue).reduce((s, b) => s + parseFloat(b.remaining_balance), 0)
+              bills.filter((b) => b.is_overdue).reduce((s, b) => s + (parseFloat(b.remaining_balance) || 0), 0)
             )} past due
           </p>
         </div>
@@ -577,13 +577,13 @@ const CustomerLedger = () => {
                   {bills.length} bill{bills.length !== 1 ? 's' : ''} shown
                 </td>
                 <td className="px-4 py-3 text-right text-sm font-bold text-gray-800">
-                  {formatCurrency(bills.reduce((s, b) => s + parseFloat(b.total_amount), 0))}
+                  {formatCurrency(bills.reduce((s, b) => s + (parseFloat(b.total_amount) || 0), 0))}
                 </td>
                 <td className="px-4 py-3 text-right text-sm font-bold text-green-600">
-                  {formatCurrency(bills.reduce((s, b) => s + parseFloat(b.total_paid), 0))}
+                  {formatCurrency(bills.reduce((s, b) => s + (parseFloat(b.total_paid) || 0), 0))}
                 </td>
                 <td className="px-4 py-3 text-right text-sm font-bold text-red-600">
-                  {formatCurrency(bills.reduce((s, b) => s + parseFloat(b.remaining_balance), 0))}
+                  {formatCurrency(bills.reduce((s, b) => s + (parseFloat(b.remaining_balance) || 0), 0))}
                 </td>
                 <td colSpan={2} />
               </tr>

@@ -11,6 +11,7 @@ router.post('/complete',            validate(['customerId']), asyncWrap(ctrl.com
 
 // Bulk status update (must be before /:id to avoid shadowing)
 router.post('/bulk-status',         validate(['status']),    asyncWrap(ctrl.bulkStatus));
+router.delete('/bulk',              validate(['ids']),       asyncWrap(ctrl.bulkDelete));
 
 // Bill number availability check  (?value=AK-2024-55)
 router.get('/check-bill-number',    asyncWrap(ctrl.checkBillNumber));

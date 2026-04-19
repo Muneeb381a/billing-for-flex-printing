@@ -261,7 +261,7 @@ const MovementsPanel = ({ item, onClose }) => {
     queryFn:  () => invAPI.getMovements(item.id, { limit: 100 }),
   });
 
-  const movements = data?.data?.data || [];
+  const movements = data?.data || [];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
@@ -341,7 +341,7 @@ const Inventory = () => {
     refetchInterval: 60_000,
   });
 
-  const items    = data?.data?.data || [];
+  const items    = data?.data || [];
   const displayed = items.filter((item) => {
     if (filter === 'critical') return item.alert_level === 'critical';
     if (filter === 'warning')  return item.alert_level !== 'ok';

@@ -18,11 +18,12 @@ import { createError } from '../middleware/errorHandler.js';
  * minSqft protects margin on tiny jobs (e.g. 0.5 sqft billed as 1 sqft each).
  */
 export const calcAreaPrice = ({ width, height, qty = 1, pricePerSqft, minSqft = 1 }) => {
-  const w        = parseFloat(width);
-  const h        = parseFloat(height);
-  const q        = parseInt(qty, 10);
-  const rate     = parseFloat(pricePerSqft);
-  const min      = parseFloat(minSqft);
+  const w        = parseFloat(width)  || 0;
+  const h        = parseFloat(height) || 0;
+  const q        = parseInt(qty, 10)  || 1;
+  const rate     = parseFloat(pricePerSqft) || 0;
+  const min      = parseFloat(minSqft) || 1;
+  if (!w || !h || !rate) throw new Error(`calcAreaPrice: width, height, and pricePerSqft are required (got w=${w}, h=${h}, rate=${rate}`);
 
   const rawSqft  = w * h;                      // per-piece area before minimum
   const unitSqft = Math.max(rawSqft, min);     // per-piece area after minimum
@@ -65,16 +66,18 @@ export const resolveQuantityTier = (tiers, qty) => {
 };
 
 /** Fixed charge — price doesn't vary with dimensions, only with qty */
-export const calcFixedPrice = ({ fixedPrice, qty = 1 }) => ({
-  unitPrice: parseFloat(fixedPrice),
-  itemTotal: parseFloat((fixedPrice * qty).toFixed(2)),
-});
+export const calcFixedPrice = ({ fixedPrice, qty = 1 }) => {
+  const p = parseFloat(fixedPrice) || 0;
+  const q = parseInt(qty, 10) || 1;
+  return { unitPrice: p, itemTotal: parseFloat((p * q).toFixed(2)) };
+};
 
 /** Custom / manual override */
-export const calcCustomPrice = ({ unitPrice, qty = 1 }) => ({
-  unitPrice: parseFloat(unitPrice),
-  itemTotal: parseFloat((parseFloat(unitPrice) * parseInt(qty, 10)).toFixed(2)),
-});
+export const calcCustomPrice = ({ unitPrice, qty = 1 }) => {
+  const p = parseFloat(unitPrice) || 0;
+  const q = parseInt(qty, 10) || 1;
+  return { unitPrice: p, itemTotal: parseFloat((p * q).toFixed(2)) };
+};
 
 // ── Dispatcher ───────────────────────────────────────────────
 
@@ -102,15 +105,16 @@ export const calcBillTotals = ({
   totalPaid     = 0,
 }) => {
   const itemsSubtotal = items.reduce(
-    (s, it) => s + parseFloat(it.item_total) + parseFloat(it.design_fee || 0) + parseFloat(it.urgent_fee || 0),
+    (s, it) => s + (parseFloat(it.item_total) || 0) + (parseFloat(it.design_fee) || 0) + (parseFloat(it.urgent_fee) || 0),
     0
   );
-  const extraTotal = extraCharges.reduce((s, ec) => s + parseFloat(ec.amount), 0);
+  const extraTotal = extraCharges.reduce((s, ec) => s + (parseFloat(ec.amount) || 0), 0);
 
+  const dv = parseFloat(discountValue) || 0;
   const discountAmount =
     discountType === 'percentage'
-      ? parseFloat(((itemsSubtotal * parseFloat(discountValue)) / 100).toFixed(2))
-      : parseFloat(discountValue);
+      ? parseFloat(((itemsSubtotal * dv) / 100).toFixed(2))
+      : dv;
 
   const totalAmount      = parseFloat((itemsSubtotal + extraTotal - discountAmount).toFixed(2));
   const remainingBalance = parseFloat((totalAmount - parseFloat(totalPaid)).toFixed(2));
