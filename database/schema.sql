@@ -333,6 +333,24 @@ LEFT JOIN (
 GROUP BY c.id, c.name, c.phone;
 
 -- ============================================================
+-- TABLE: expenses
+-- ============================================================
+
+CREATE TABLE expenses (
+  id             SERIAL PRIMARY KEY,
+  title          VARCHAR(255)    NOT NULL,
+  amount         NUMERIC(12, 2)  NOT NULL CHECK (amount >= 0),
+  category       VARCHAR(100),
+  payment_method payment_method  NOT NULL DEFAULT 'cash',
+  expense_date   DATE            NOT NULL DEFAULT CURRENT_DATE,
+  notes          TEXT,
+  created_at     TIMESTAMPTZ     NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_expenses_date ON expenses (expense_date DESC);
+CREATE INDEX idx_expenses_category ON expenses (category);
+
+-- ============================================================
 -- VIEW: daily_sales
 -- Used by the Dashboard for daily/monthly reports
 -- ============================================================

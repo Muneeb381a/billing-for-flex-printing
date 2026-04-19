@@ -72,6 +72,8 @@
   "pending_label":     "pending",
   "in_progress_label": "in progress",
 
+  "expenses":          "Expenses",
+
   "search":            "Search…",
   "language":          "Language",
   "erp_version":       "Press ERP v1.0"

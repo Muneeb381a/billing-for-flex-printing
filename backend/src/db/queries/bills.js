@@ -107,6 +107,59 @@ export const updateDelivered = (id) =>
 export const remove = (id) =>
   pool.query(`DELETE FROM bills WHERE id = $1 RETURNING id`, [id]);
 
+// ── Duplicate ─────────────────────────────────────────────────
+export const duplicate = async (client, sourceId, newBillNumber) => {
+  // New bill shell — copy metadata, reset payments
+  const { rows: billRows } = await client.query(
+    `INSERT INTO bills (bill_number, customer_id, discount_type, discount_value, notes,
+                        subtotal, discount_amount, extra_charges, total_amount, advance_paid, remaining_balance)
+     SELECT $1, customer_id, discount_type, discount_value, notes,
+            subtotal, discount_amount, extra_charges, total_amount, 0, total_amount
+     FROM   bills WHERE id = $2
+     RETURNING *`,
+    [newBillNumber, sourceId]
+  );
+  const newId = billRows[0].id;
+
+  // Copy items
+  await client.query(
+    `INSERT INTO bill_items
+       (bill_id, product_id, description, pricing_model, width, height, sqft,
+        quantity, unit_price, item_total, design_fee, urgent_fee, notes, sort_order)
+     SELECT $1, product_id, description, pricing_model, width, height, sqft,
+            quantity, unit_price, item_total, design_fee, urgent_fee, notes, sort_order
+     FROM   bill_items WHERE bill_id = $2`,
+    [newId, sourceId]
+  );
+
+  // Copy extra charges
+  await client.query(
+    `INSERT INTO bill_extra_charges (bill_id, label, amount)
+     SELECT $1, label, amount FROM bill_extra_charges WHERE bill_id = $2`,
+    [newId, sourceId]
+  );
+
+  return billRows[0];
+};
+
+// ── Bulk status ───────────────────────────────────────────────
+export const bulkUpdateStatus = (ids, status) => {
+  if (status === 'delivered') {
+    return pool.query(
+      `UPDATE bills SET status = 'delivered', delivered_at = NOW()
+       WHERE id = ANY($1::int[]) AND status NOT IN ('cancelled', 'delivered')
+       RETURNING id, status`,
+      [ids]
+    );
+  }
+  return pool.query(
+    `UPDATE bills SET status = $1
+     WHERE id = ANY($2::int[]) AND status NOT IN ('cancelled')
+     RETURNING id, status`,
+    [status, ids]
+  );
+};
+
 // ── Bill Items ────────────────────────────────────────────────
 
 export const getItems = (billId) =>

@@ -9,6 +9,9 @@ const router = Router();
 // MUST be before /:id routes to avoid route shadowing
 router.post('/complete',            validate(['customerId']), asyncWrap(ctrl.completeBill));
 
+// Bulk status update (must be before /:id to avoid shadowing)
+router.post('/bulk-status',         validate(['status']),    asyncWrap(ctrl.bulkStatus));
+
 // Bill number availability check  (?value=AK-2024-55)
 router.get('/check-bill-number',    asyncWrap(ctrl.checkBillNumber));
 
@@ -19,6 +22,9 @@ router.get('/:id/invoice', validateId, asyncWrap(ctrl.getInvoice));
 router.post('/',      validate(['customerId']), asyncWrap(ctrl.create));
 router.put('/:id',    validateId, asyncWrap(ctrl.update));
 router.delete('/:id', validateId, asyncWrap(ctrl.remove));
+
+// Duplicate bill
+router.post('/:id/duplicate', validateId,                              asyncWrap(ctrl.duplicateBill));
 
 // Status & discount
 router.patch('/:id/status',   validateId, validate(['status']),        asyncWrap(ctrl.updateStatus));

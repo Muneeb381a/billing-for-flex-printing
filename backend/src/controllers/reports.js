@@ -55,9 +55,10 @@ export const getMonthly = async (req, res) => {
        COALESCE(SUM(advance_paid),       0)        AS total_collected,
        COALESCE(SUM(remaining_balance),  0)        AS total_outstanding
      FROM bills
-     WHERE created_at >= NOW() - INTERVAL '${months} months'
+     WHERE created_at >= NOW() - ($1 * INTERVAL '1 month')
      GROUP BY DATE_TRUNC('month', created_at)
-     ORDER BY month DESC`
+     ORDER BY month DESC`,
+    [months]
   );
   res.json({ data: rows });
 };

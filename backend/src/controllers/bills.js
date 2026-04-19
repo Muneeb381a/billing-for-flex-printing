@@ -707,6 +707,38 @@ export const removeExtraCharge = async (req, res, next) => {
 
 // ── Discount ──────────────────────────────────────────────────
 
+// ── Duplicate ─────────────────────────────────────────────────
+export const duplicateBill = async (req, res, next) => {
+  const sourceId = Number(req.params.id);
+  const { rows: source } = await Q.findById(sourceId);
+  if (!source.length) return next(createError(404, 'Bill not found'));
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: numRows } = await client.query('SELECT generate_bill_number() AS num');
+    const newBill = await Q.duplicate(client, sourceId, numRows[0].num);
+    await client.query('COMMIT');
+    res.status(201).json({ data: newBill, message: `Duplicated as ${newBill.bill_number}` });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+};
+
+// ── Bulk status update ────────────────────────────────────────
+export const bulkStatus = async (req, res, next) => {
+  const { ids = [], status } = req.body;
+  const valid = ['pending', 'in_progress', 'completed', 'delivered', 'cancelled'];
+  if (!valid.includes(status)) return next(createError(400, `Invalid status`));
+  const billIds = [...new Set(ids.map(Number).filter((n) => Number.isInteger(n) && n > 0))];
+  if (!billIds.length) return next(createError(400, 'No valid bill IDs provided'));
+  const { rows } = await Q.bulkUpdateStatus(billIds, status);
+  res.json({ data: rows, updated: rows.length });
+};
+
 export const applyDiscount = async (req, res, next) => {
   const billId = Number(req.params.id);
   const { discountType = 'fixed', discountValue = 0 } = req.body;

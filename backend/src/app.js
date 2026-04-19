@@ -14,6 +14,7 @@ import pricingRoutes    from './routes/pricing.js';
 import reportRoutes     from './routes/reports.js';
 import settingsRoutes   from './routes/settings.js';
 import inventoryRoutes  from './routes/inventory.js';
+import expenseRoutes    from './routes/expenses.js';
 import authRoutes       from './routes/auth.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { requireAuth }  from './middleware/requireAuth.js';
@@ -64,6 +65,7 @@ app.use('/api/pricing',    requireAuth, pricingRoutes);
 app.use('/api/reports',    requireAuth, reportRoutes);
 app.use('/api/settings',   requireAuth, settingsRoutes);
 app.use('/api/inventory',  requireAuth, inventoryRoutes);
+app.use('/api/expenses',   requireAuth, expenseRoutes);
 
 // ── 404 Handler ───────────────────────────────────────────────
 app.use((_req, res) => res.status(404).json({ error: 'Route not found' }));

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
-  ArrowLeft, Printer, Plus, CreditCard, RefreshCw, Truck, AlertTriangle, MessageCircle,
+  ArrowLeft, Printer, Plus, CreditCard, RefreshCw, Truck, AlertTriangle, MessageCircle, Copy,
 } from 'lucide-react';
 import {
   PageSpinner, Card, CardHeader, Table, Button, Select,
@@ -27,8 +27,9 @@ const BillDetail = () => {
   const navigate = useNavigate();
   const qc       = useQueryClient();
 
-  const [payModal, setPayModal] = useState(false);
-  const [waModal,  setWaModal]  = useState(false);
+  const [payModal,    setPayModal]    = useState(false);
+  const [waModal,     setWaModal]     = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['bill', id],
@@ -38,6 +39,20 @@ const BillDetail = () => {
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['bill', id] });
     qc.invalidateQueries({ queryKey: ['bills'] });
+  };
+
+  const handleDuplicate = async () => {
+    setDuplicating(true);
+    try {
+      const res = await billApi.duplicateBill(id);
+      qc.invalidateQueries({ queryKey: ['bills'] });
+      toast.success(res.data.message || 'Bill duplicated');
+      navigate(`/bills/${res.data.data.id}`);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to duplicate bill');
+    } finally {
+      setDuplicating(false);
+    }
   };
 
   const statusMutation = useMutation({
@@ -179,6 +194,14 @@ const BillDetail = () => {
             onClick={() => window.open(`/bills/${id}/print`, '_blank')}
           >
             Print
+          </Button>
+          <Button
+            variant="secondary" size="sm"
+            icon={<Copy size={14} />}
+            loading={duplicating}
+            onClick={handleDuplicate}
+          >
+            Duplicate
           </Button>
           <button
             type="button"
