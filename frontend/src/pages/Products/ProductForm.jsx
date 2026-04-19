@@ -7,6 +7,7 @@ import { Input, Select, Button, Textarea } from '../../components/ui/index.js';
 import { PRICING_MODEL_LABELS } from '../../utils/format.js';
 import * as api from '../../api/products.js';
 import * as catApi from '../../api/categories.js';
+import * as subcatApi from '../../api/subcategories.js';
 
 const PRICING_MODELS = Object.entries(PRICING_MODEL_LABELS).map(([value, label]) => ({ value, label }));
 const UNITS = [
@@ -28,20 +29,29 @@ const ProductForm = ({ product, onSuccess }) => {
 
   const categories = (catData?.data || []).map((c) => ({ value: c.id, label: c.name }));
 
-  const { register, handleSubmit, watch, reset, formState: { errors } } = useForm({
+  const { register, handleSubmit, watch, reset, setValue, formState: { errors } } = useForm({
     defaultValues: {
-      categoryId:   product?.category_id   || '',
-      name:         product?.name          || '',
-      description:  product?.description   || '',
-      pricingModel: product?.pricing_model || 'area_based',
-      basePrice:    product?.base_price    || '',
-      unit:         product?.unit          || 'sqft',
+      categoryId:    product?.category_id    || '',
+      subcategoryId: product?.subcategory_id || '',
+      name:          product?.name           || '',
+      description:   product?.description    || '',
+      pricingModel:  product?.pricing_model  || 'area_based',
+      basePrice:     product?.base_price     || '',
+      unit:          product?.unit           || 'sqft',
     },
   });
 
-  useEffect(() => { if (product) reset(product); }, [product, reset]);
+  useEffect(() => { if (product) reset({ ...product, categoryId: product.category_id, subcategoryId: product.subcategory_id || '' }); }, [product, reset]);
 
   const pricingModel = watch('pricingModel');
+  const categoryId   = watch('categoryId');
+
+  const { data: subcatData } = useQuery({
+    queryKey: ['subcategories', categoryId],
+    queryFn:  () => subcatApi.getSubcategories({ category_id: categoryId }),
+    enabled:  !!categoryId,
+  });
+  const subcategories = (subcatData?.data || []).map((s) => ({ value: s.id, label: s.name }));
 
   const mutation = useMutation({
     mutationFn: async (data) => {
@@ -79,14 +89,23 @@ const ProductForm = ({ product, onSuccess }) => {
 
   return (
     <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-4">
-      <Select
-        label="Category"
-        required
-        options={categories}
-        placeholder="Select category…"
-        error={errors.categoryId?.message}
-        {...register('categoryId', { required: 'Category is required' })}
-      />
+      <div className="grid grid-cols-2 gap-4">
+        <Select
+          label="Category"
+          required
+          options={categories}
+          placeholder="Select category…"
+          error={errors.categoryId?.message}
+          {...register('categoryId', { required: 'Category is required', onChange: () => setValue('subcategoryId', '') })}
+        />
+        <Select
+          label="Type / Subcategory"
+          options={subcategories}
+          placeholder={categoryId ? (subcategories.length ? 'Select type…' : 'No subtypes') : 'Pick category first'}
+          disabled={!categoryId || subcategories.length === 0}
+          {...register('subcategoryId')}
+        />
+      </div>
       <Input
         label="Product Name"
         placeholder="e.g. Star Flex"

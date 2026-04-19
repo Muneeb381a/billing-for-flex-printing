@@ -5,10 +5,11 @@ import { createError } from '../middleware/errorHandler.js';
 // ── Products ──────────────────────────────────────────────────
 
 export const getAll = async (req, res) => {
-  const { category_id, active_only = 'true' } = req.query;
+  const { category_id, subcategory_id, active_only = 'true' } = req.query;
   const { rows } = await Q.findAll({
-    categoryId: category_id ? Number(category_id) : null,
-    activeOnly:  active_only !== 'false',
+    categoryId:    category_id    ? Number(category_id)    : null,
+    subcategoryId: subcategory_id ? Number(subcategory_id) : null,
+    activeOnly:    active_only !== 'false',
   });
   res.json({ data: rows });
 };
@@ -26,14 +27,20 @@ export const getById = async (req, res, next) => {
 };
 
 export const create = async (req, res) => {
-  const { categoryId, name, description, pricingModel, basePrice, unit } = req.body;
-  const { rows } = await Q.create({ categoryId, name: name.trim(), description, pricingModel, basePrice, unit });
+  const { categoryId, subcategoryId, name, description, pricingModel, basePrice, unit } = req.body;
+  const { rows } = await Q.create({
+    categoryId, subcategoryId: subcategoryId || null,
+    name: name.trim(), description, pricingModel, basePrice, unit,
+  });
   res.status(201).json({ data: rows[0] });
 };
 
 export const update = async (req, res, next) => {
-  const { categoryId, name, description, pricingModel, basePrice, unit, isActive } = req.body;
-  const { rows } = await Q.update(req.params.id, { categoryId, name, description, pricingModel, basePrice, unit, isActive });
+  const { categoryId, subcategoryId, name, description, pricingModel, basePrice, unit, isActive } = req.body;
+  const { rows } = await Q.update(req.params.id, {
+    categoryId, subcategoryId: subcategoryId || null,
+    name, description, pricingModel, basePrice, unit, isActive,
+  });
   if (!rows.length) return next(createError(404, 'Product not found'));
   res.json({ data: rows[0] });
 };

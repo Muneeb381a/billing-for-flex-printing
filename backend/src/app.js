@@ -4,7 +4,8 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 
 import customerRoutes   from './routes/customers.js';
-import categoryRoutes   from './routes/categories.js';
+import categoryRoutes    from './routes/categories.js';
+import subcategoryRoutes from './routes/subcategories.js';
 import productRoutes    from './routes/products.js';
 import billRoutes       from './routes/bills.js';
 import paymentRoutes    from './routes/payments.js';
@@ -55,7 +56,8 @@ app.use('/api/auth', authRoutes);
 
 // ── Protected API Routes (token required on every request) ────
 app.use('/api/customers',  requireAuth, customerRoutes);
-app.use('/api/categories', requireAuth, categoryRoutes);
+app.use('/api/categories',    requireAuth, categoryRoutes);
+app.use('/api/subcategories', requireAuth, subcategoryRoutes);
 app.use('/api/products',   requireAuth, productRoutes);
 app.use('/api/bills',      requireAuth, billRoutes);
 app.use('/api/payments',   requireAuth, paymentRoutes);

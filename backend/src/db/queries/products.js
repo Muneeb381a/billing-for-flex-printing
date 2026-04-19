@@ -2,48 +2,55 @@ import pool from '../../config/db.js';
 
 // ── Products ──────────────────────────────────────────────────
 
-export const findAll = ({ categoryId = null, activeOnly = true } = {}) =>
+export const findAll = ({ categoryId = null, subcategoryId = null, activeOnly = true } = {}) =>
   pool.query(
     `SELECT p.id, p.name, p.description, p.pricing_model, p.base_price, p.unit, p.is_active,
-            c.id AS category_id, c.name AS category_name, c.slug AS category_slug
+            c.id   AS category_id,    c.name AS category_name,    c.slug AS category_slug,
+            s.id   AS subcategory_id, s.name AS subcategory_name
      FROM   products p
-     JOIN   categories c ON c.id = p.category_id
-     WHERE  ($1::int IS NULL OR p.category_id = $1)
-       AND  ($2 = FALSE    OR p.is_active = TRUE)
-     ORDER  BY c.sort_order, p.name`,
-    [categoryId, activeOnly]
+     JOIN   categories c   ON c.id = p.category_id
+     LEFT JOIN subcategories s ON s.id = p.subcategory_id
+     WHERE  ($1::int IS NULL OR p.category_id    = $1)
+       AND  ($2::int IS NULL OR p.subcategory_id = $2)
+       AND  ($3 = FALSE      OR p.is_active = TRUE)
+     ORDER  BY c.sort_order, s.sort_order, s.name, p.name`,
+    [categoryId, subcategoryId, activeOnly]
   );
 
 export const findById = (id) =>
   pool.query(
-    `SELECT p.*, c.name AS category_name, c.slug AS category_slug
+    `SELECT p.*,
+            c.name AS category_name,    c.slug AS category_slug,
+            s.name AS subcategory_name
      FROM   products p
-     JOIN   categories c ON c.id = p.category_id
+     JOIN   categories c    ON c.id = p.category_id
+     LEFT JOIN subcategories s ON s.id = p.subcategory_id
      WHERE  p.id = $1`,
     [id]
   );
 
-export const create = ({ categoryId, name, description = null, pricingModel, basePrice = null, unit = 'sqft' }) =>
+export const create = ({ categoryId, subcategoryId = null, name, description = null, pricingModel, basePrice = null, unit = 'sqft' }) =>
   pool.query(
-    `INSERT INTO products (category_id, name, description, pricing_model, base_price, unit)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO products (category_id, subcategory_id, name, description, pricing_model, base_price, unit)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING *`,
-    [categoryId, name, description, pricingModel, basePrice, unit]
+    [categoryId, subcategoryId, name, description, pricingModel, basePrice, unit]
   );
 
-export const update = (id, { categoryId, name, description, pricingModel, basePrice, unit, isActive }) =>
+export const update = (id, { categoryId, subcategoryId, name, description, pricingModel, basePrice, unit, isActive }) =>
   pool.query(
     `UPDATE products
-     SET    category_id   = COALESCE($2, category_id),
-            name          = COALESCE($3, name),
-            description   = COALESCE($4, description),
-            pricing_model = COALESCE($5, pricing_model),
-            base_price    = COALESCE($6, base_price),
-            unit          = COALESCE($7, unit),
-            is_active     = COALESCE($8, is_active)
+     SET    category_id    = COALESCE($2,  category_id),
+            subcategory_id = COALESCE($3,  subcategory_id),
+            name           = COALESCE($4,  name),
+            description    = COALESCE($5,  description),
+            pricing_model  = COALESCE($6,  pricing_model),
+            base_price     = COALESCE($7,  base_price),
+            unit           = COALESCE($8,  unit),
+            is_active      = COALESCE($9,  is_active)
      WHERE  id = $1
      RETURNING *`,
-    [id, categoryId, name, description, pricingModel, basePrice, unit, isActive]
+    [id, categoryId, subcategoryId, name, description, pricingModel, basePrice, unit, isActive]
   );
 
 export const remove = (id) =>

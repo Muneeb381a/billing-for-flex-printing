@@ -72,14 +72,36 @@ CREATE TABLE categories (
 );
 
 -- ============================================================
+-- TABLE: subcategories
+-- Material types / product families within a category.
+-- Flex Printing → Star Flex | China Flex | Mesh Flex | Backlit Flex
+-- Offset Printing → Business Cards | Flyers | Brochures | Letterheads
+-- Digital Printing → Stickers | Vinyl | Photo Prints | Banners
+-- ============================================================
+
+CREATE TABLE subcategories (
+  id          SERIAL        PRIMARY KEY,
+  category_id INTEGER       NOT NULL REFERENCES categories (id) ON DELETE CASCADE,
+  name        VARCHAR(255)  NOT NULL,
+  description TEXT,
+  sort_order  INTEGER       NOT NULL DEFAULT 0,
+  is_active   BOOLEAN       NOT NULL DEFAULT TRUE,
+  created_at  TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+  UNIQUE (category_id, name)
+);
+
+CREATE INDEX idx_subcategories_category ON subcategories (category_id);
+
+-- ============================================================
 -- TABLE: products
 -- Star Flex, China Flex, Business Cards, Flyers, Stickers...
 -- ============================================================
 
 CREATE TABLE products (
-  id            SERIAL              PRIMARY KEY,
-  category_id   INTEGER             NOT NULL REFERENCES categories (id) ON DELETE RESTRICT,
-  name          VARCHAR(255)        NOT NULL,
+  id              SERIAL              PRIMARY KEY,
+  category_id     INTEGER             NOT NULL REFERENCES categories (id) ON DELETE RESTRICT,
+  subcategory_id  INTEGER             REFERENCES subcategories (id) ON DELETE SET NULL,
+  name            VARCHAR(255)        NOT NULL,
   description   TEXT,
   pricing_model pricing_model_type  NOT NULL,
   -- base_price meaning varies by model:
@@ -94,8 +116,9 @@ CREATE TABLE products (
   updated_at    TIMESTAMPTZ         NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_products_category_id ON products (category_id);
-CREATE INDEX idx_products_is_active   ON products (is_active);
+CREATE INDEX idx_products_category_id    ON products (category_id);
+CREATE INDEX idx_products_subcategory_id ON products (subcategory_id);
+CREATE INDEX idx_products_is_active      ON products (is_active);
 
 -- ============================================================
 -- TABLE: product_specifications
@@ -382,33 +405,114 @@ INSERT INTO categories (name, slug, description, sort_order) VALUES
   ('Digital Printing', 'digital-printing', 'Stickers, photo prints, digital outputs', 3);
 
 -- ============================================================
+-- SEED: Subcategories (material types / product families)
+-- ============================================================
+
+INSERT INTO subcategories (category_id, name, sort_order) VALUES
+  -- Flex Printing
+  ((SELECT id FROM categories WHERE slug='flex-printing'), 'Star Flex',    1),
+  ((SELECT id FROM categories WHERE slug='flex-printing'), 'China Flex',   2),
+  ((SELECT id FROM categories WHERE slug='flex-printing'), 'Mesh Flex',    3),
+  ((SELECT id FROM categories WHERE slug='flex-printing'), 'Backlit Flex', 4),
+  -- Offset Printing
+  ((SELECT id FROM categories WHERE slug='offset-printing'), 'Business Cards', 1),
+  ((SELECT id FROM categories WHERE slug='offset-printing'), 'Flyers',         2),
+  ((SELECT id FROM categories WHERE slug='offset-printing'), 'Brochures',      3),
+  ((SELECT id FROM categories WHERE slug='offset-printing'), 'Letterheads',    4),
+  -- Digital Printing
+  ((SELECT id FROM categories WHERE slug='digital-printing'), 'Stickers',    1),
+  ((SELECT id FROM categories WHERE slug='digital-printing'), 'Vinyl',       2),
+  ((SELECT id FROM categories WHERE slug='digital-printing'), 'Photo Prints',3),
+  ((SELECT id FROM categories WHERE slug='digital-printing'), 'Banners',     4);
+
+-- ============================================================
 -- SEED: Sample products (customize pricing per your shop)
 -- ============================================================
 
-INSERT INTO products (category_id, name, pricing_model, base_price, unit) VALUES
-  -- Flex Printing (area_based → price per sqft)
-  ((SELECT id FROM categories WHERE slug='flex-printing'), 'Star Flex',   'area_based', 120.00, 'sqft'),
-  ((SELECT id FROM categories WHERE slug='flex-printing'), 'China Flex',  'area_based',  90.00, 'sqft'),
-  ((SELECT id FROM categories WHERE slug='flex-printing'), 'Backlit Flex','area_based', 150.00, 'sqft'),
-
-  -- Offset Printing (quantity_based → see quantity_tiers)
-  ((SELECT id FROM categories WHERE slug='offset-printing'), 'Business Cards', 'quantity_based', NULL, 'pcs'),
-  ((SELECT id FROM categories WHERE slug='offset-printing'), 'Flyers A5',      'quantity_based', NULL, 'pcs'),
-  ((SELECT id FROM categories WHERE slug='offset-printing'), 'Brochures A4',   'quantity_based', NULL, 'pcs'),
-
-  -- Digital Printing
-  ((SELECT id FROM categories WHERE slug='digital-printing'), 'Vinyl Stickers', 'area_based',  200.00, 'sqft'),
-  ((SELECT id FROM categories WHERE slug='digital-printing'), 'Photo Print 4x6','fixed_charge',  50.00, 'pcs');
+INSERT INTO products (category_id, subcategory_id, name, pricing_model, base_price, unit) VALUES
+  -- Flex → Star Flex
+  ((SELECT id FROM categories WHERE slug='flex-printing'),
+   (SELECT id FROM subcategories WHERE name='Star Flex'),
+   'Star Flex Standard', 'area_based', 120.00, 'sqft'),
+  ((SELECT id FROM categories WHERE slug='flex-printing'),
+   (SELECT id FROM subcategories WHERE name='Star Flex'),
+   'Star Flex Premium',  'area_based', 140.00, 'sqft'),
+  -- Flex → China Flex
+  ((SELECT id FROM categories WHERE slug='flex-printing'),
+   (SELECT id FROM subcategories WHERE name='China Flex'),
+   'China Flex Economy', 'area_based',  80.00, 'sqft'),
+  ((SELECT id FROM categories WHERE slug='flex-printing'),
+   (SELECT id FROM subcategories WHERE name='China Flex'),
+   'China Flex Standard','area_based',  90.00, 'sqft'),
+  -- Flex → Backlit Flex
+  ((SELECT id FROM categories WHERE slug='flex-printing'),
+   (SELECT id FROM subcategories WHERE name='Backlit Flex'),
+   'Backlit Flex',       'area_based', 150.00, 'sqft'),
+  -- Flex → Mesh Flex
+  ((SELECT id FROM categories WHERE slug='flex-printing'),
+   (SELECT id FROM subcategories WHERE name='Mesh Flex'),
+   'Mesh Flex',          'area_based', 110.00, 'sqft'),
+  -- Offset → Business Cards
+  ((SELECT id FROM categories WHERE slug='offset-printing'),
+   (SELECT id FROM subcategories WHERE name='Business Cards'),
+   'Business Cards 350GSM', 'quantity_based', NULL, 'pcs'),
+  ((SELECT id FROM categories WHERE slug='offset-printing'),
+   (SELECT id FROM subcategories WHERE name='Business Cards'),
+   'Business Cards 250GSM', 'quantity_based', NULL, 'pcs'),
+  -- Offset → Flyers
+  ((SELECT id FROM categories WHERE slug='offset-printing'),
+   (SELECT id FROM subcategories WHERE name='Flyers'),
+   'Flyers A5', 'quantity_based', NULL, 'pcs'),
+  ((SELECT id FROM categories WHERE slug='offset-printing'),
+   (SELECT id FROM subcategories WHERE name='Flyers'),
+   'Flyers A4', 'quantity_based', NULL, 'pcs'),
+  -- Offset → Brochures
+  ((SELECT id FROM categories WHERE slug='offset-printing'),
+   (SELECT id FROM subcategories WHERE name='Brochures'),
+   'Brochures A4 Tri-Fold', 'quantity_based', NULL, 'pcs'),
+  -- Offset → Letterheads
+  ((SELECT id FROM categories WHERE slug='offset-printing'),
+   (SELECT id FROM subcategories WHERE name='Letterheads'),
+   'Letterhead A4', 'quantity_based', NULL, 'pcs'),
+  -- Digital → Stickers
+  ((SELECT id FROM categories WHERE slug='digital-printing'),
+   (SELECT id FROM subcategories WHERE name='Stickers'),
+   'Vinyl Stickers',  'area_based', 200.00, 'sqft'),
+  ((SELECT id FROM categories WHERE slug='digital-printing'),
+   (SELECT id FROM subcategories WHERE name='Stickers'),
+   'Paper Stickers',  'area_based', 150.00, 'sqft'),
+  -- Digital → Vinyl
+  ((SELECT id FROM categories WHERE slug='digital-printing'),
+   (SELECT id FROM subcategories WHERE name='Vinyl'),
+   'Vinyl Banner',         'area_based', 180.00, 'sqft'),
+  ((SELECT id FROM categories WHERE slug='digital-printing'),
+   (SELECT id FROM subcategories WHERE name='Vinyl'),
+   'One-Way Vision Vinyl', 'area_based', 250.00, 'sqft'),
+  -- Digital → Photo Prints
+  ((SELECT id FROM categories WHERE slug='digital-printing'),
+   (SELECT id FROM subcategories WHERE name='Photo Prints'),
+   'Photo Print 4x6',  'fixed_charge',  50.00, 'pcs'),
+  ((SELECT id FROM categories WHERE slug='digital-printing'),
+   (SELECT id FROM subcategories WHERE name='Photo Prints'),
+   'Photo Print 8x10', 'fixed_charge', 120.00, 'pcs');
 
 -- ============================================================
--- SEED: Quantity tiers for Business Cards
+-- SEED: Quantity tiers
 -- ============================================================
 
+-- Business Cards 350GSM
 INSERT INTO quantity_tiers (product_id, min_qty, max_qty, price) VALUES
-  ((SELECT id FROM products WHERE name='Business Cards'), 100,  199,  500.00),
-  ((SELECT id FROM products WHERE name='Business Cards'), 200,  499,  800.00),
-  ((SELECT id FROM products WHERE name='Business Cards'), 500,  999, 1500.00),
-  ((SELECT id FROM products WHERE name='Business Cards'), 1000, NULL,2500.00);
+  ((SELECT id FROM products WHERE name='Business Cards 350GSM'), 100,  199,  500.00),
+  ((SELECT id FROM products WHERE name='Business Cards 350GSM'), 200,  499,  800.00),
+  ((SELECT id FROM products WHERE name='Business Cards 350GSM'), 500,  999, 1500.00),
+  ((SELECT id FROM products WHERE name='Business Cards 350GSM'), 1000, NULL,2500.00);
+
+-- Business Cards 250GSM
+INSERT INTO quantity_tiers (product_id, min_qty, max_qty, price) VALUES
+  ((SELECT id FROM products WHERE name='Business Cards 250GSM'), 100,  199,  400.00),
+  ((SELECT id FROM products WHERE name='Business Cards 250GSM'), 200,  499,  650.00),
+  ((SELECT id FROM products WHERE name='Business Cards 250GSM'), 500,  999, 1200.00),
+  ((SELECT id FROM products WHERE name='Business Cards 250GSM'), 1000, NULL,2000.00);
 
 -- Flyers A5
 INSERT INTO quantity_tiers (product_id, min_qty, max_qty, price) VALUES
@@ -416,12 +520,33 @@ INSERT INTO quantity_tiers (product_id, min_qty, max_qty, price) VALUES
   ((SELECT id FROM products WHERE name='Flyers A5'), 500,  999, 2500.00),
   ((SELECT id FROM products WHERE name='Flyers A5'), 1000, NULL,4000.00);
 
+-- Flyers A4
+INSERT INTO quantity_tiers (product_id, min_qty, max_qty, price) VALUES
+  ((SELECT id FROM products WHERE name='Flyers A4'), 100,  499, 1200.00),
+  ((SELECT id FROM products WHERE name='Flyers A4'), 500,  999, 3500.00),
+  ((SELECT id FROM products WHERE name='Flyers A4'), 1000, NULL,6000.00);
+
+-- Brochures A4 Tri-Fold
+INSERT INTO quantity_tiers (product_id, min_qty, max_qty, price) VALUES
+  ((SELECT id FROM products WHERE name='Brochures A4 Tri-Fold'), 100,  499, 2000.00),
+  ((SELECT id FROM products WHERE name='Brochures A4 Tri-Fold'), 500,  999, 6000.00),
+  ((SELECT id FROM products WHERE name='Brochures A4 Tri-Fold'), 1000, NULL,10000.00);
+
+-- Letterhead A4
+INSERT INTO quantity_tiers (product_id, min_qty, max_qty, price) VALUES
+  ((SELECT id FROM products WHERE name='Letterhead A4'), 100,  499,  900.00),
+  ((SELECT id FROM products WHERE name='Letterhead A4'), 500,  999, 3000.00),
+  ((SELECT id FROM products WHERE name='Letterhead A4'), 1000, NULL,5000.00);
+
 -- ============================================================
 -- SEED: Business Card specifications
 -- ============================================================
 
 INSERT INTO product_specifications (product_id, spec_key, spec_value) VALUES
-  ((SELECT id FROM products WHERE name='Business Cards'), 'size',           '3.5 x 2 inch'),
-  ((SELECT id FROM products WHERE name='Business Cards'), 'paper_type',     '350 GSM Art Card'),
-  ((SELECT id FROM products WHERE name='Business Cards'), 'printing_sides', 'double'),
-  ((SELECT id FROM products WHERE name='Business Cards'), 'lamination',     'matte');
+  ((SELECT id FROM products WHERE name='Business Cards 350GSM'), 'size',           '3.5 x 2 inch'),
+  ((SELECT id FROM products WHERE name='Business Cards 350GSM'), 'paper_type',     '350 GSM Art Card'),
+  ((SELECT id FROM products WHERE name='Business Cards 350GSM'), 'printing_sides', 'double'),
+  ((SELECT id FROM products WHERE name='Business Cards 350GSM'), 'lamination',     'matte'),
+  ((SELECT id FROM products WHERE name='Business Cards 250GSM'), 'size',           '3.5 x 2 inch'),
+  ((SELECT id FROM products WHERE name='Business Cards 250GSM'), 'paper_type',     '250 GSM Art Card'),
+  ((SELECT id FROM products WHERE name='Business Cards 250GSM'), 'printing_sides', 'single');

@@ -33,7 +33,7 @@ const PREDEFINED_CHARGES = [
 
 const newItem = () => ({
   id: crypto.randomUUID(),
-  categoryId: '', productId: '', pricingModel: '',
+  categoryId: '', subcategoryId: '', productId: '', pricingModel: '',
   description: '', width: '', height: '',
   quantity: 1, unitPrice: '', sqft: null,
   itemTotal: 0, designFee: 0, urgentFee: 0, breakdown: '',
