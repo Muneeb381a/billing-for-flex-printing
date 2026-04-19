@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { formatCurrency, formatDate, PRICING_MODEL_LABELS } from '../../utils/format.js';
 import * as billApi from '../../api/bills.js';
+import * as settingsAPI from '../../api/settings.js';
 
 const PrintInvoice = () => {
   const { id } = useParams();
@@ -11,6 +12,14 @@ const PrintInvoice = () => {
     queryKey: ['bill', id],
     queryFn:  () => billApi.getBill(id),
   });
+
+  const { data: settingsData } = useQuery({
+    queryKey: ['shop-settings'],
+    queryFn:  settingsAPI.getSettings,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const shopSettings = settingsData?.data ?? {};
 
   useEffect(() => {
     if (data) {
@@ -62,8 +71,11 @@ const PrintInvoice = () => {
         {/* Header */}
         <div className="bg-indigo-700 text-white px-8 py-6 flex justify-between items-start">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">PRINTING PRESS</h1>
-            <p className="text-indigo-200 text-sm mt-1">Professional Printing Services</p>
+            <h1 className="text-2xl font-bold tracking-tight">{shopSettings.shop_name || 'PRINTING PRESS'}</h1>
+            <p className="text-indigo-200 text-sm mt-1">{shopSettings.tagline || 'Professional Printing Services'}</p>
+            {shopSettings.whatsapp_phone && (
+              <p className="text-indigo-200 text-sm mt-0.5">WhatsApp: {shopSettings.whatsapp_phone}</p>
+            )}
           </div>
           <div className="text-right">
             <p className="text-3xl font-mono font-bold">{bill.bill_number}</p>
@@ -224,8 +236,13 @@ const PrintInvoice = () => {
         )}
 
         {/* Footer */}
-        <div className="bg-gray-50 px-8 py-4 border-t border-gray-200 text-center">
+        <div className="bg-gray-50 px-8 py-4 border-t border-gray-200 text-center space-y-0.5">
           <p className="text-xs text-gray-400">Thank you for your business!</p>
+          {shopSettings.whatsapp_phone && (
+            <p className="text-xs text-gray-400">
+              Contact us on WhatsApp: <span className="font-medium text-gray-600">{shopSettings.whatsapp_phone}</span>
+            </p>
+          )}
         </div>
       </div>
     </>

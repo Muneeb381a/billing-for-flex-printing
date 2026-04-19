@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Save, Store, Palette, Link2 } from 'lucide-react';
+import { Save, Store, Link2, Phone } from 'lucide-react';
 import * as settingsAPI from '../../api/settings.js';
 import { toast } from 'react-hot-toast';
 
@@ -46,17 +46,18 @@ const Settings = () => {
   });
 
   const { register, handleSubmit, reset, formState: { errors, isDirty } } = useForm({
-    defaultValues: { shopName: '', tagline: '', ctaText: '', ctaRoute: '/bills/new' },
+    defaultValues: { shopName: '', tagline: '', ctaText: '', ctaRoute: '/bills/new', whatsappPhone: '' },
   });
 
   useEffect(() => {
     if (data?.data) {
       const s = data.data;
       reset({
-        shopName: s.shop_name  || '',
-        tagline:  s.tagline    || '',
-        ctaText:  s.cta_text   || 'New Bill',
-        ctaRoute: s.cta_route  || '/bills/new',
+        shopName:      s.shop_name      || '',
+        tagline:       s.tagline        || '',
+        ctaText:       s.cta_text       || 'New Bill',
+        ctaRoute:      s.cta_route      || '/bills/new',
+        whatsappPhone: s.whatsapp_phone || '',
       });
     }
   }, [data, reset]);
@@ -111,6 +112,20 @@ const Settings = () => {
             className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl
               focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
             placeholder="Professional Printing Solutions"
+          />
+        </Field>
+      </Section>
+
+      <Section icon={Phone} title="Contact" subtitle="Business WhatsApp number shown on printed invoices">
+        <Field
+          label="WhatsApp Number"
+          hint="Enter in Pakistani format e.g. 03239062418 — shown on invoices so customers can contact you"
+        >
+          <input
+            {...register('whatsappPhone')}
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl
+              focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            placeholder="03239062418"
           />
         </Field>
       </Section>
