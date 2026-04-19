@@ -4,7 +4,7 @@ import {
   DollarSign, TrendingUp, Clock, AlertCircle,
   Plus, Users, BarChart2, Boxes,
   CheckCircle, AlertTriangle, ChevronRight,
-  ArrowUpRight, FileText,
+  ArrowUpRight, FileText, TrendingDown,
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '../utils/format.js';
 import { StatusBadge } from '../components/ui/Badge.jsx';
@@ -13,6 +13,7 @@ import Banner from '../components/Banner.jsx';
 import * as dashAPI     from '../api/dashboard.js';
 import * as settingsAPI from '../api/settings.js';
 import * as invAPI      from '../api/inventory.js';
+import * as expAPI      from '../api/expenses.js';
 import cn from '../utils/cn.js';
 
 // ─────────────────────────────────────────────────────────────
@@ -40,6 +41,7 @@ const STAT_PALETTES = {
   brand:   { strip: 'border-t-brand-500',   icon: 'bg-brand-50   text-brand-600',   value: 'text-brand-700'   },
   amber:   { strip: 'border-t-amber-500',   icon: 'bg-amber-50   text-amber-600',   value: 'text-amber-700'   },
   red:     { strip: 'border-t-red-500',     icon: 'bg-red-50     text-red-600',     value: 'text-red-700'     },
+  violet:  { strip: 'border-t-violet-500',  icon: 'bg-violet-50  text-violet-600',  value: 'text-violet-700'  },
 };
 
 const DStat = ({ title, value, sub, icon: Icon, palette, loading, onClick }) => {
@@ -160,11 +162,21 @@ const Dashboard = () => {
     refetchInterval: 5 * 60 * 1000,
   });
 
-  const shop    = settingsData?.data     ?? {};
-  const s       = summary?.data          ?? {};
-  const alerts  = stockAlerts?.data?.data ?? [];
-  const critical = alerts.filter((a) => a.alert_level === 'critical');
+  const { data: expSummary } = useQuery({
+    queryKey: ['expense-summary-dash'],
+    queryFn:  () => expAPI.getSummary({ from: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0] }),
+    staleTime: 2 * 60 * 1000,
+  });
+
+  const shop     = settingsData?.data     ?? {};
+  const s        = summary?.data          ?? {};
+  const alerts   = stockAlerts?.data?.data ?? [];
+  const critical  = alerts.filter((a) => a.alert_level === 'critical');
   const billsToday = s.today_bill_count ?? 0;
+
+  const monthExpenses  = parseFloat(expSummary?.data?.this_month || 0);
+  const monthRevenue   = parseFloat(s.month_sales || 0);
+  const monthNetProfit = monthRevenue - monthExpenses;
 
   const orders = pending?.data || [];
   const products = topProducts?.data || [];
@@ -206,7 +218,7 @@ const Dashboard = () => {
       />
 
       {/* ── Stat Cards ────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         <DStat
           title={t('today_revenue')}
           value={formatCurrency(s.today_sales)}
@@ -222,6 +234,15 @@ const Dashboard = () => {
           sub={`${s.month_bill_count ?? 0} ${t('bills_month')}`}
           icon={TrendingUp}
           palette="brand"
+          loading={loadingSummary}
+          onClick={() => navigate('/reports')}
+        />
+        <DStat
+          title="Net Profit (Month)"
+          value={formatCurrency(monthNetProfit)}
+          sub={`${formatCurrency(monthExpenses)} expenses`}
+          icon={monthNetProfit >= 0 ? TrendingUp : TrendingDown}
+          palette={monthNetProfit >= 0 ? 'emerald' : 'red'}
           loading={loadingSummary}
           onClick={() => navigate('/reports')}
         />

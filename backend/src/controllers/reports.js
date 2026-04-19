@@ -6,6 +6,9 @@ const parseRange = (from, to) => {
   return [start.toISOString(), end.toISOString()];
 };
 
+// Shared helper: parse optional date string for expense queries (YYYY-MM-DD)
+const parseDate = (s) => (s ? s : null);
+
 export const getSummary = async (req, res) => {
   const [start, end] = parseRange(req.query.from, req.query.to);
 
@@ -86,4 +89,106 @@ export const getTopProducts = async (req, res) => {
     [start, end, limit]
   );
   res.json({ data: rows });
+};
+
+export const getTopCustomers = async (req, res) => {
+  const [start, end] = parseRange(req.query.from, req.query.to);
+  const limit = Math.min(Number(req.query.limit || 15), 50);
+
+  const { rows } = await pool.query(
+    `SELECT
+       c.id,
+       c.name                                  AS customer_name,
+       c.phone                                 AS customer_phone,
+       COUNT(DISTINCT b.id)                    AS bill_count,
+       COALESCE(SUM(b.total_amount),      0)   AS total_billed,
+       COALESCE(SUM(b.advance_paid),      0)   AS total_paid,
+       COALESCE(SUM(b.remaining_balance), 0)   AS total_outstanding,
+       COALESCE(AVG(b.total_amount),      0)   AS avg_bill
+     FROM customers c
+     JOIN bills b ON b.customer_id = c.id
+     WHERE b.created_at >= $1 AND b.created_at <= $2
+     GROUP BY c.id, c.name, c.phone
+     ORDER BY total_billed DESC
+     LIMIT $3`,
+    [start, end, limit]
+  );
+  res.json({ data: rows });
+};
+
+export const getProfitLoss = async (req, res) => {
+  const [start, end] = parseRange(req.query.from, req.query.to);
+  const fromDate = req.query.from
+    ? new Date(req.query.from).toISOString().split('T')[0]
+    : new Date(start).toISOString().split('T')[0];
+  const toDate = req.query.to
+    ? new Date(req.query.to).toISOString().split('T')[0]
+    : new Date(end).toISOString().split('T')[0];
+
+  const [revenueResult, expenseResult, dailyResult] = await Promise.all([
+    pool.query(
+      `SELECT
+         COALESCE(SUM(total_amount),      0) AS total_revenue,
+         COALESCE(SUM(advance_paid),      0) AS total_collected,
+         COALESCE(SUM(remaining_balance), 0) AS total_outstanding,
+         COUNT(*)                            AS bill_count
+       FROM bills
+       WHERE created_at >= $1 AND created_at <= $2`,
+      [start, end]
+    ),
+    pool.query(
+      `SELECT
+         COALESCE(SUM(amount), 0) AS total_expenses,
+         COUNT(*)                 AS expense_count
+       FROM expenses
+       WHERE expense_date >= $1::date AND expense_date <= $2::date`,
+      [fromDate, toDate]
+    ),
+    pool.query(
+      `SELECT
+         d.day::date                                              AS date,
+         COALESCE(b.revenue,  0)                                 AS revenue,
+         COALESCE(e.expenses, 0)                                 AS expenses,
+         COALESCE(b.revenue, 0) - COALESCE(e.expenses, 0)       AS profit
+       FROM generate_series(
+         $1::date, $2::date, '1 day'::interval
+       ) AS d(day)
+       LEFT JOIN (
+         SELECT DATE(created_at) AS day, SUM(total_amount) AS revenue
+         FROM   bills
+         WHERE  created_at >= $3 AND created_at <= $4
+         GROUP  BY DATE(created_at)
+       ) b ON b.day = d.day::date
+       LEFT JOIN (
+         SELECT expense_date AS day, SUM(amount) AS expenses
+         FROM   expenses
+         WHERE  expense_date >= $1::date AND expense_date <= $2::date
+         GROUP  BY expense_date
+       ) e ON e.day = d.day::date
+       WHERE b.revenue IS NOT NULL OR e.expenses IS NOT NULL
+       ORDER BY d.day ASC`,
+      [fromDate, toDate, start, end]
+    ),
+  ]);
+
+  const rev  = revenueResult.rows[0];
+  const exp  = expenseResult.rows[0];
+  const totalRevenue  = parseFloat(rev.total_revenue);
+  const totalExpenses = parseFloat(exp.total_expenses);
+
+  res.json({
+    data: {
+      total_revenue:     totalRevenue,
+      total_collected:   parseFloat(rev.total_collected),
+      total_outstanding: parseFloat(rev.total_outstanding),
+      bill_count:        parseInt(rev.bill_count, 10),
+      total_expenses:    totalExpenses,
+      expense_count:     parseInt(exp.expense_count, 10),
+      gross_profit:      totalRevenue - totalExpenses,
+      profit_margin:     totalRevenue > 0
+        ? parseFloat(((totalRevenue - totalExpenses) / totalRevenue * 100).toFixed(1))
+        : 0,
+      daily:             dailyResult.rows,
+    },
+  });
 };

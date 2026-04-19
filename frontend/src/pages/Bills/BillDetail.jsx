@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
-  ArrowLeft, Printer, Plus, CreditCard, RefreshCw, Truck, AlertTriangle, MessageCircle, Copy,
+  ArrowLeft, Printer, Plus, CreditCard, RefreshCw, Truck, AlertTriangle, MessageCircle, Copy, Receipt,
 } from 'lucide-react';
 import {
   PageSpinner, Card, CardHeader, Table, Button, Select,
@@ -11,8 +11,9 @@ import {
 import { StatusBadge } from '../../components/ui/Badge.jsx';
 import { formatCurrency, formatDate, formatDateTime, PRICING_MODEL_LABELS } from '../../utils/format.js';
 import * as billApi from '../../api/bills.js';
-import AddPaymentModal  from './AddPaymentModal.jsx';
-import WhatsAppModal   from './WhatsAppModal.jsx';
+import AddPaymentModal      from './AddPaymentModal.jsx';
+import WhatsAppModal        from './WhatsAppModal.jsx';
+import PaymentReceiptModal  from './PaymentReceiptModal.jsx';
 
 const STATUS_OPTIONS = [
   { value: 'pending',     label: 'Pending'      },
@@ -27,9 +28,10 @@ const BillDetail = () => {
   const navigate = useNavigate();
   const qc       = useQueryClient();
 
-  const [payModal,    setPayModal]    = useState(false);
-  const [waModal,     setWaModal]     = useState(false);
-  const [duplicating, setDuplicating] = useState(false);
+  const [payModal,     setPayModal]    = useState(false);
+  const [waModal,      setWaModal]    = useState(false);
+  const [duplicating,  setDuplicating] = useState(false);
+  const [receiptPayment, setReceiptPayment] = useState(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['bill', id],
@@ -147,6 +149,17 @@ const BillDetail = () => {
     { key: 'payment_method',  header: 'Method',    render: (r) => r.payment_method.replace('_', ' ').toUpperCase() },
     { key: 'reference_number',header: 'Reference', render: (r) => r.reference_number || '—' },
     { key: 'notes',           header: 'Notes',     render: (r) => r.notes || '—' },
+    {
+      key: 'receipt', header: '',
+      render: (r) => (
+        <Button
+          size="sm" variant="ghost"
+          icon={<Receipt size={13} />}
+          onClick={() => setReceiptPayment(r)}
+          title="Print Receipt"
+        />
+      ),
+    },
   ];
 
   return (
@@ -359,6 +372,14 @@ const BillDetail = () => {
         bill={bill}
         billId={id}
       />
+
+      {receiptPayment && (
+        <PaymentReceiptModal
+          payment={receiptPayment}
+          bill={bill}
+          onClose={() => setReceiptPayment(null)}
+        />
+      )}
     </div>
   );
 };
