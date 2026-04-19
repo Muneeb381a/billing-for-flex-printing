@@ -524,9 +524,23 @@ export const markDelivered = async (req, res, next) => {
 };
 
 export const remove = async (req, res, next) => {
-  const { rows } = await Q.remove(req.params.id);
-  if (!rows.length) return next(createError(404, 'Bill not found'));
-  res.json({ message: 'Bill deleted', id: rows[0].id });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: bill } = await client.query('SELECT id FROM bills WHERE id=$1', [req.params.id]);
+    if (!bill.length) { await client.query('ROLLBACK'); return next(createError(404, 'Bill not found')); }
+    await client.query('DELETE FROM payments    WHERE bill_id=$1', [req.params.id]);
+    await client.query('DELETE FROM bill_extra_charges WHERE bill_id=$1', [req.params.id]);
+    await client.query('DELETE FROM bill_items  WHERE bill_id=$1', [req.params.id]);
+    await client.query('DELETE FROM bills       WHERE id=$1',      [req.params.id]);
+    await client.query('COMMIT');
+    res.json({ message: 'Bill deleted', id: Number(req.params.id) });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 };
 
 // ── Bill Items ────────────────────────────────────────────────
