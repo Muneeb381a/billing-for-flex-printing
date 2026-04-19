@@ -7,7 +7,8 @@ export const findAll = ({ customerId = null, status = null, search = '', limit =
     `SELECT b.id, b.bill_number, b.status,
             b.subtotal, b.discount_amount, b.extra_charges, b.total_amount,
             b.advance_paid, b.remaining_balance, b.due_date, b.created_at,
-            c.id AS customer_id, c.name AS customer_name, c.phone AS customer_phone
+            c.id AS customer_id, c.name AS customer_name, c.phone AS customer_phone,
+            COUNT(*) OVER() AS total_count
      FROM   bills b
      JOIN   customers c ON c.id = b.customer_id
      WHERE  ($1::int IS NULL OR b.customer_id = $1)

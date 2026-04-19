@@ -14,7 +14,9 @@ import pricingRoutes    from './routes/pricing.js';
 import reportRoutes     from './routes/reports.js';
 import settingsRoutes   from './routes/settings.js';
 import inventoryRoutes  from './routes/inventory.js';
+import authRoutes       from './routes/auth.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import { requireAuth }  from './middleware/requireAuth.js';
 
 const app = express();
 
@@ -44,21 +46,24 @@ if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('dev'));
 }
 
-// ── Health Check ──────────────────────────────────────────────
+// ── Health Check (public) ─────────────────────────────────────
 app.get('/health', (_req, res) => res.json({ status: 'ok', ts: new Date() }));
 
-// ── API Routes ────────────────────────────────────────────────
-app.use('/api/customers',  customerRoutes);
-app.use('/api/categories', categoryRoutes);
-app.use('/api/products',   productRoutes);
-app.use('/api/bills',      billRoutes);
-app.use('/api/payments',   paymentRoutes);
-app.use('/api/dashboard',  dashboardRoutes);
-app.use('/api/ledger',     ledgerRoutes);
-app.use('/api/pricing',    pricingRoutes);
-app.use('/api/reports',    reportRoutes);
-app.use('/api/settings',   settingsRoutes);
-app.use('/api/inventory',  inventoryRoutes);
+// ── Auth routes (public — no token required) ──────────────────
+app.use('/api/auth', authRoutes);
+
+// ── Protected API Routes (token required on every request) ────
+app.use('/api/customers',  requireAuth, customerRoutes);
+app.use('/api/categories', requireAuth, categoryRoutes);
+app.use('/api/products',   requireAuth, productRoutes);
+app.use('/api/bills',      requireAuth, billRoutes);
+app.use('/api/payments',   requireAuth, paymentRoutes);
+app.use('/api/dashboard',  requireAuth, dashboardRoutes);
+app.use('/api/ledger',     requireAuth, ledgerRoutes);
+app.use('/api/pricing',    requireAuth, pricingRoutes);
+app.use('/api/reports',    requireAuth, reportRoutes);
+app.use('/api/settings',   requireAuth, settingsRoutes);
+app.use('/api/inventory',  requireAuth, inventoryRoutes);
 
 // ── 404 Handler ───────────────────────────────────────────────
 app.use((_req, res) => res.status(404).json({ error: 'Route not found' }));

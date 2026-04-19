@@ -21,8 +21,9 @@ export const getSummary = () =>
 export const getDailySales = ({ days = 30 } = {}) =>
   pool.query(
     `SELECT * FROM daily_sales
-     WHERE sale_date >= CURRENT_DATE - INTERVAL '${days} days'
-     ORDER BY sale_date DESC`
+     WHERE sale_date >= CURRENT_DATE - ($1::integer * INTERVAL '1 day')
+     ORDER BY sale_date DESC`,
+    [days]
   );
 
 export const getMonthlySales = ({ months = 12 } = {}) =>
@@ -34,9 +35,10 @@ export const getMonthlySales = ({ months = 12 } = {}) =>
        COALESCE(SUM(advance_paid), 0)            AS total_collected,
        COALESCE(SUM(remaining_balance), 0)       AS total_outstanding
      FROM bills
-     WHERE created_at >= NOW() - INTERVAL '${months} months'
+     WHERE created_at >= NOW() - ($1::integer * INTERVAL '1 month')
      GROUP BY DATE_TRUNC('month', created_at)
-     ORDER BY month DESC`
+     ORDER BY month DESC`,
+    [months]
   );
 
 export const getPendingOrders = ({ limit = 20 } = {}) =>
@@ -78,9 +80,9 @@ export const getTopProducts = ({ limit = 10, days = 30 } = {}) =>
      JOIN   products   p   ON p.id   = bi.product_id
      JOIN   categories cat ON cat.id = p.category_id
      JOIN   bills      b   ON b.id   = bi.bill_id
-     WHERE  b.created_at >= NOW() - INTERVAL '${days} days'
+     WHERE  b.created_at >= NOW() - ($2::integer * INTERVAL '1 day')
      GROUP  BY p.id, p.name, cat.name
      ORDER  BY total_revenue DESC
      LIMIT  $1`,
-    [limit]
+    [limit, days]
   );

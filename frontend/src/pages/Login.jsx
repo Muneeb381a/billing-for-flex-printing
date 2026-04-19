@@ -15,19 +15,18 @@ const Login = () => {
 
   if (isLoggedIn) return <Navigate to="/" replace />;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-    setTimeout(() => {
-      const ok = login(username.trim(), password);
-      if (ok) {
-        navigate('/', { replace: true });
-      } else {
-        setError('Invalid username or password.');
-        setLoading(false);
-      }
-    }, 400);
+    try {
+      await login(username.trim(), password);
+      navigate('/', { replace: true });
+    } catch (err) {
+      const msg = err.response?.data?.error || 'Invalid username or password.';
+      setError(msg);
+      setLoading(false);
+    }
   };
 
   return (

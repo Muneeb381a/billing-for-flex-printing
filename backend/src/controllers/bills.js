@@ -98,7 +98,8 @@ export const getAll = async (req, res) => {
     limit:      Number(limit),
     offset:     Number(offset),
   });
-  res.json({ data: rows, count: rows.length });
+  const total = rows[0] ? parseInt(rows[0].total_count, 10) : 0;
+  res.json({ data: rows, count: rows.length, total });
 };
 
 export const getById = async (req, res, next) => {
