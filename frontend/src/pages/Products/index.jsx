@@ -184,8 +184,7 @@ const Products = () => {
       {/* Tabs */}
       <div className="flex gap-1 mb-4 border-b border-gray-200">
         {[
-          { key: 'products',      label: 'Products'      },
-          { key: 'subcategories', label: 'Subcategories', icon: <Layers size={14} /> },
+          { key: 'products',      label: 'Products'      }
         ].map((t) => (
           <button
             key={t.key}

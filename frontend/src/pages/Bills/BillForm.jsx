@@ -37,7 +37,7 @@ const newItem = () => ({
   categoryId: '',
   description: '', width: '', height: '',
   quantity: 1, sqft: null,
-  amount: '', designFee: 0, urgentFee: 0,
+  rate: '', designFee: 0, urgentFee: 0,
 });
 
 const BillNumberStatus = ({ status }) => {
@@ -121,9 +121,12 @@ const BillForm = () => {
     setExtraCharges((p) => p.filter((ec) => ec.id !== id));
 
   // ── Live totals ───────────────────────────────────────────────
+  // finalAmount per row = sqft × rate; NaN-safe via Number() fallback
+  const rowFinal = (it) => parseFloat(((Number(it.sqft) || 0) * (Number(it.rate) || 0)).toFixed(2));
+
   const subtotal = useMemo(
     () => items.reduce((s, it) =>
-      s + (parseFloat(it.amount || 0)) + (parseFloat(it.designFee || 0)) + (parseFloat(it.urgentFee || 0)), 0),
+      s + rowFinal(it) + (Number(it.designFee) || 0) + (Number(it.urgentFee) || 0), 0),
     [items],
   );
 
@@ -134,11 +137,11 @@ const BillForm = () => {
     [items],
   );
   const totalSqft = useMemo(
-    () => parseFloat(items.reduce((s, it) => s + (parseFloat(it.sqft || 0)), 0).toFixed(3)),
+    () => parseFloat(items.reduce((s, it) => s + (Number(it.sqft) || 0), 0).toFixed(3)),
     [items],
   );
   const totalBillAmount = useMemo(
-    () => items.reduce((s, it) => s + (parseFloat(it.amount || 0)), 0),
+    () => items.reduce((s, it) => s + rowFinal(it), 0),
     [items],
   );
 
@@ -186,7 +189,7 @@ const BillForm = () => {
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
       if (!it.categoryId)                    return `Row ${i + 1}: select an item`;
-      if (parseFloat(it.amount || 0) <= 0)   return `Row ${i + 1}: enter an amount`;
+      if ((Number(it.rate) || 0) <= 0)         return `Row ${i + 1}: enter a rate (per sqft)`;
     }
     for (const ec of extraCharges) {
       if (!ec.label)  return 'Extra charge label is required';
@@ -214,7 +217,7 @@ const BillForm = () => {
           width:       it.width  ? parseFloat(it.width)  : undefined,
           height:      it.height ? parseFloat(it.height) : undefined,
           quantity:    parseInt(it.quantity, 10) || 1,
-          amount:      parseFloat(it.amount || 0),
+          amount:      rowFinal(it),
           designFee:   parseFloat(it.designFee || 0),
           urgentFee:   parseFloat(it.urgentFee || 0),
         })),
