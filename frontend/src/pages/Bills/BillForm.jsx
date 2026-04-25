@@ -34,7 +34,7 @@ const PREDEFINED_CHARGES = [
 
 const newItem = () => ({
   id: crypto.randomUUID(),
-  categoryId: '',
+  categoryId: '', catType: '',
   description: '', width: '', height: '',
   quantity: 1, sqft: null,
   rate: '', designFee: 0, urgentFee: 0,
@@ -120,9 +120,13 @@ const BillForm = () => {
   const removeCharge = (id) =>
     setExtraCharges((p) => p.filter((ec) => ec.id !== id));
 
-  // ── Live totals ───────────────────────────────────────────────
-  // finalAmount per row = sqft × rate; NaN-safe via Number() fallback
-  const rowFinal = (it) => parseFloat(((Number(it.sqft) || 0) * (Number(it.rate) || 0)).toFixed(2));
+  // ── Live totals — dispatches by catType, never NaN ──────────
+  const rowFinal = (it) => {
+    const rate = Number(it.rate) || 0;
+    if (it.catType === 'area')     return parseFloat(((Number(it.sqft) || 0) * rate).toFixed(2));
+    if (it.catType === 'quantity') return parseFloat(((parseInt(it.quantity, 10) || 1) * rate).toFixed(2));
+    return rate; // fixed — rate IS the amount
+  };
 
   const subtotal = useMemo(
     () => items.reduce((s, it) =>
@@ -136,8 +140,14 @@ const BillForm = () => {
     () => items.reduce((s, it) => s + (parseInt(it.quantity, 10) || 0), 0),
     [items],
   );
+  // Total sqft counts only area-type rows
   const totalSqft = useMemo(
-    () => parseFloat(items.reduce((s, it) => s + (Number(it.sqft) || 0), 0).toFixed(3)),
+    () => parseFloat(
+      items
+        .filter((it) => it.catType === 'area')
+        .reduce((s, it) => s + (Number(it.sqft) || 0), 0)
+        .toFixed(3)
+    ),
     [items],
   );
   const totalBillAmount = useMemo(
@@ -189,7 +199,7 @@ const BillForm = () => {
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
       if (!it.categoryId)                    return `Row ${i + 1}: select an item`;
-      if ((Number(it.rate) || 0) <= 0)         return `Row ${i + 1}: enter a rate (per sqft)`;
+      if ((Number(it.rate) || 0) <= 0)         return `Row ${i + 1}: enter a ${it.catType === 'fixed' ? 'amount' : 'rate'}`;
     }
     for (const ec of extraCharges) {
       if (!ec.label)  return 'Extra charge label is required';
