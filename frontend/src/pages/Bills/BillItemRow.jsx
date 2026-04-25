@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Trash2, Plus, ChevronDown, ChevronUp } from 'lucide-react';
 import { Input, Select } from '../../components/ui/index.js';
 import { formatCurrency } from '../../utils/format.js';
 import * as catApi from '../../api/categories.js';
 import cn from '../../utils/cn.js';
 
-// ── Maps DB pricing_type → 3 display types ───────────────────
 const TYPE_MAP = {
   area_based:     'area',
   quantity_based: 'quantity',
@@ -14,14 +13,12 @@ const TYPE_MAP = {
   custom:         'fixed',
 };
 
-// ── Left-border accent per type ───────────────────────────────
 const STRIP = {
   area:     'border-l-indigo-500',
   quantity: 'border-l-emerald-500',
   fixed:    'border-l-amber-500',
 };
 
-// ── sqft calculation ─────────────────────────────────────────
 const calcSqft = (width, height, quantity) => {
   const w = Number(width)  || 0;
   const h = Number(height) || 0;
@@ -30,23 +27,21 @@ const calcSqft = (width, height, quantity) => {
   return parseFloat((w * h * q).toFixed(3));
 };
 
-// ── Shared read-only display box ─────────────────────────────
-const ReadBox = ({ label, value, highlight, showLabel, wide }) => (
-  <div className={cn('shrink-0', wide ? 'flex-1 min-w-25' : '')}>
-    {showLabel && <p className="text-xs font-medium text-slate-600 mb-1">{label}</p>}
+const ReadBox = ({ label, value, highlight }) => (
+  <div className="flex flex-col gap-1">
+    <p className="text-xs font-semibold text-slate-700 uppercase tracking-wide">{label}</p>
     <div className={cn(
-      'h-9.5 px-2 rounded-xl border flex items-center justify-center font-mono tabular-nums text-sm',
+      'min-h-11.5 px-3 rounded-xl border flex items-center justify-center font-mono tabular-nums text-sm',
       highlight
         ? 'border-brand-200 bg-brand-50 text-brand-700 font-bold border-2'
-        : 'border-slate-200 bg-slate-50 text-slate-300',
+        : 'border-slate-200 bg-slate-50 text-slate-400',
     )}>
       {value}
     </div>
   </div>
 );
 
-// ── Main component ────────────────────────────────────────────
-const BillItemRow = ({ item, index, onUpdate, onRemove }) => {
+const BillItemRow = ({ item, index, onUpdate, onRemove, onQuickCreate }) => {
   const [expanded, setExpanded] = useState(false);
 
   const { data: catData } = useQuery({
@@ -55,16 +50,13 @@ const BillItemRow = ({ item, index, onUpdate, onRemove }) => {
     staleTime: Infinity,
   });
 
-  const allCats    = catData?.data || [];
-  const categories = allCats.map((c) => ({ value: String(c.id), label: c.name }));
+  const allCats     = catData?.data || [];
+  const categories  = allCats.map((c) => ({ value: String(c.id), label: c.name }));
   const selectedCat = allCats.find((c) => String(c.id) === String(item.categoryId));
 
-  // Derive type and pricing_mode from the selected category
   const type        = TYPE_MAP[selectedCat?.pricing_type] ?? null;
-  // pricing_mode only matters for quantity type; default 'total' per spec
   const pricingMode = selectedCat?.pricing_mode ?? 'total';
 
-  // ── Per-type derived values (never NaN) ──────────────────
   const qty  = parseInt(item.quantity, 10) || 1;
   const rate = Number(item.rate) || 0;
   const sqft = Number(item.sqft) || 0;
@@ -73,22 +65,19 @@ const BillItemRow = ({ item, index, onUpdate, onRemove }) => {
     if (!type) return 0;
     if (type === 'area') return parseFloat((sqft * rate).toFixed(2));
     if (type === 'quantity') {
-      // per_unit: qty × rate   |   total: rate is the whole job price
       return pricingMode === 'per_unit'
         ? parseFloat((qty * rate).toFixed(2))
         : rate;
     }
-    return rate; // fixed — rate IS the amount
+    return rate;
   })();
 
   const designFee = Number(item.designFee) || 0;
   const urgentFee = Number(item.urgentFee) || 0;
   const lineTotal = finalAmount + designFee + urgentFee;
 
-  const showLabel   = index === 0;
-  const stripClass  = STRIP[type] ?? 'border-l-slate-200';
+  const stripClass = STRIP[type] ?? 'border-l-slate-200';
 
-  // ── Handle category selection ─────────────────────────────
   const handleCategoryChange = (e) => {
     const cat            = allCats.find((c) => String(c.id) === e.target.value);
     const newType        = TYPE_MAP[cat?.pricing_type] ?? 'fixed';
@@ -97,23 +86,9 @@ const BillItemRow = ({ item, index, onUpdate, onRemove }) => {
       categoryId:  e.target.value,
       catType:     newType,
       pricingMode: newPricingMode,
-      // reset all measure fields so stale values don't bleed across types
       width: '', height: '', quantity: 1, sqft: null, rate: '',
     });
   };
-
-  // ── Expand button ─────────────────────────────────────────
-  const ExpandBtn = () => (
-    <div className="pb-0.5 shrink-0">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-      >
-        {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-      </button>
-    </div>
-  );
 
   return (
     <div className={cn(
@@ -122,211 +97,213 @@ const BillItemRow = ({ item, index, onUpdate, onRemove }) => {
       stripClass,
     )}>
 
-      {/* ── Category selector row ─────────────────────────── */}
-      <div className="px-3 pt-3 pb-2">
-        <div className="grid grid-cols-12 gap-2 items-end">
+      {/* ── Category selector row ─────────────────────────────── */}
+      <div className="px-4 pt-4 pb-3">
+        <div className="flex gap-2 items-end">
+          <span className={cn(
+            'w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black shrink-0 mb-1.5',
+            finalAmount > 0 ? 'bg-brand-100 text-brand-700' : 'bg-slate-100 text-slate-400',
+          )}>
+            {index + 1}
+          </span>
 
-          {/* Row badge */}
-          <div className="col-span-1 flex items-end justify-center pb-1">
-            <span className={cn(
-              'w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black shrink-0',
-              finalAmount > 0 ? 'bg-brand-100 text-brand-700' : 'bg-slate-100 text-slate-400',
-            )}>
-              {index + 1}
-            </span>
-          </div>
+          <Select
+            label="Product / Service"
+            placeholder="Select product…"
+            options={categories}
+            value={item.categoryId}
+            onChange={handleCategoryChange}
+            size="lg"
+            wrapperClassName="flex-1"
+          />
 
-          <div className="col-span-10">
-            <Select
-              label={showLabel ? 'Item / Category' : undefined}
-              placeholder="Select item…"
-              options={categories}
-              value={item.categoryId}
-              onChange={handleCategoryChange}
-            />
-          </div>
-
-          <div className="col-span-1 flex items-end justify-end pb-0.5">
+          <div className="flex items-end gap-1 mb-0.5">
+            <button
+              type="button"
+              onClick={() => onQuickCreate?.(item.id)}
+              title="Add new product"
+              className="p-2 text-brand-500 hover:text-brand-700 hover:bg-brand-50 rounded-lg transition-colors cursor-pointer"
+            >
+              <Plus size={15} />
+            </button>
             <button
               type="button"
               onClick={() => onRemove(item.id)}
-              className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+              className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
             >
-              <Trash2 size={14} />
+              <Trash2 size={15} />
             </button>
           </div>
         </div>
       </div>
 
-      {/* ── TYPE: area — W × H × Qty → Sqft → Rate → Total ── */}
+      {/* ── Area: W × H × Qty → Sqft → Rate → Total ─────────── */}
       {type === 'area' && (
-        <div className="flex gap-2 items-end px-3 pb-2.5 ml-7">
-          <div className="w-18 shrink-0">
+        <div className="px-4 pb-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             <Input
-              label={showLabel ? 'W (ft)' : undefined}
-              type="number" min="0" step="0.1" placeholder="—"
+              label="Width (ft)"
+              type="number" min="0" step="0.1" placeholder="0"
+              size="lg"
               value={item.width}
               onChange={(e) => {
                 const w = e.target.value;
                 onUpdate(item.id, { width: w, sqft: calcSqft(w, item.height, item.quantity) });
               }}
             />
-          </div>
-          <div className="w-18 shrink-0">
             <Input
-              label={showLabel ? 'H (ft)' : undefined}
-              type="number" min="0" step="0.1" placeholder="—"
+              label="Height (ft)"
+              type="number" min="0" step="0.1" placeholder="0"
+              size="lg"
               value={item.height}
               onChange={(e) => {
                 const h = e.target.value;
                 onUpdate(item.id, { height: h, sqft: calcSqft(item.width, h, item.quantity) });
               }}
             />
-          </div>
-          <div className="w-15 shrink-0">
             <Input
-              label={showLabel ? 'Qty' : undefined}
+              label="Quantity"
               type="number" min="1" step="1" placeholder="1"
+              size="lg"
               value={item.quantity}
               onChange={(e) => {
                 const q = e.target.value;
                 onUpdate(item.id, { quantity: q, sqft: calcSqft(item.width, item.height, q) });
               }}
             />
-          </div>
-          <ReadBox
-            label="Sqft"
-            value={item.sqft != null ? item.sqft : '—'}
-            highlight={false}
-            showLabel={showLabel}
-          />
-          <div className="w-22.5 shrink-0">
+            <ReadBox
+              label="Sqft"
+              value={item.sqft != null ? item.sqft : '—'}
+              highlight={false}
+            />
             <Input
-              label={showLabel ? 'Rate/sqft' : undefined}
+              label="Rate / sqft"
               type="number" min="0" step="1" prefix="₨" placeholder="0"
+              size="lg"
               value={item.rate}
               onChange={(e) => onUpdate(item.id, { rate: e.target.value })}
             />
-          </div>
-          <ReadBox
-            label="Total Amount"
-            value={finalAmount > 0 ? formatCurrency(finalAmount) : '—'}
-            highlight={finalAmount > 0}
-            showLabel={showLabel}
-            wide
-          />
-          <ExpandBtn />
-        </div>
-      )}
-
-      {/* ── TYPE: quantity ────────────────────────────────── */}
-      {type === 'quantity' && (
-        <div className="flex gap-2 items-end px-3 pb-2.5 ml-7">
-          <div className="w-28 shrink-0">
-            <Input
-              label={showLabel ? 'Quantity' : undefined}
-              type="number" min="1" step="1" placeholder="1"
-              value={item.quantity}
-              onChange={(e) => onUpdate(item.id, { quantity: e.target.value })}
-            />
-          </div>
-          <div className="w-36 shrink-0">
-            <Input
-              label={showLabel
-                ? (pricingMode === 'per_unit' ? 'Rate / item' : 'Total Amount')
-                : undefined}
-              type="number" min="0" step="1" prefix="₨" placeholder="0"
-              value={item.rate}
-              onChange={(e) => onUpdate(item.id, { rate: e.target.value })}
-            />
-          </div>
-          {/* Show computed total only in per_unit mode (in total mode, input IS the total) */}
-          {pricingMode === 'per_unit' && (
             <ReadBox
               label="Total Amount"
               value={finalAmount > 0 ? formatCurrency(finalAmount) : '—'}
               highlight={finalAmount > 0}
-              showLabel={showLabel}
-              wide
-            />
-          )}
-          <ExpandBtn />
-        </div>
-      )}
-
-      {/* ── TYPE: fixed — Amount is the total ───────────── */}
-      {type === 'fixed' && (
-        <div className="flex gap-2 items-end px-3 pb-2.5 ml-7">
-          <div className="w-52 shrink-0">
-            <Input
-              label={showLabel ? 'Amount (PKR)' : undefined}
-              type="number" min="0" step="1" prefix="₨" placeholder="0"
-              value={item.rate}
-              onChange={(e) => onUpdate(item.id, { rate: e.target.value })}
             />
           </div>
-          <ExpandBtn />
-        </div>
-      )}
-
-      {/* ── Formula hint ──────────────────────────────────── */}
-      {type === 'area' && item.sqft != null && rate > 0 && (
-        <div className="px-3 pb-2.5 ml-7 flex items-center justify-between flex-wrap gap-1">
-          <p className="text-[11px] text-slate-400 font-mono">
-            {item.sqft} sqft × ₨{rate.toLocaleString('en-PK')} ={' '}
-            <span className="text-brand-600 font-semibold">{formatCurrency(finalAmount)}</span>
-          </p>
-          {(designFee > 0 || urgentFee > 0) && (
-            <p className="text-[11px] text-slate-500">
-              Line: <span className="font-bold">{formatCurrency(lineTotal)}</span>
+          {item.sqft != null && rate > 0 && (
+            <p className="text-xs text-slate-400 font-mono mt-2.5">
+              {item.sqft} sqft × ₨{rate.toLocaleString('en-PK')} ={' '}
+              <span className="text-indigo-600 font-semibold">{formatCurrency(finalAmount)}</span>
+              {(designFee > 0 || urgentFee > 0) && (
+                <span className="text-slate-500 ml-2">
+                  · Line total: <span className="font-bold">{formatCurrency(lineTotal)}</span>
+                </span>
+              )}
             </p>
           )}
         </div>
       )}
 
-      {type === 'quantity' && qty > 0 && rate > 0 && (
-        <div className="px-3 pb-2.5 ml-7">
-          <p className="text-[11px] text-slate-400 font-mono">
-            {pricingMode === 'per_unit'
-              ? <>
-                  {qty} pcs × ₨{rate.toLocaleString('en-PK')} ={' '}
-                  <span className="text-emerald-600 font-semibold">{formatCurrency(finalAmount)}</span>
-                </>
-              : <>
-                  {qty} pcs · Total:{' '}
-                  <span className="text-emerald-600 font-semibold">{formatCurrency(finalAmount)}</span>
-                </>
-            }
-            {(designFee > 0 || urgentFee > 0) && (
-              <span className="text-slate-500 ml-2">
-                · Line: <span className="font-bold">{formatCurrency(lineTotal)}</span>
-              </span>
+      {/* ── Quantity ──────────────────────────────────────────── */}
+      {type === 'quantity' && (
+        <div className="px-4 pb-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <Input
+              label="Quantity"
+              type="number" min="1" step="1" placeholder="1"
+              size="lg"
+              value={item.quantity}
+              onChange={(e) => onUpdate(item.id, { quantity: e.target.value })}
+            />
+            <Input
+              label={pricingMode === 'per_unit' ? 'Rate / item' : 'Total Amount'}
+              type="number" min="0" step="1" prefix="₨" placeholder="0"
+              size="lg"
+              value={item.rate}
+              onChange={(e) => onUpdate(item.id, { rate: e.target.value })}
+            />
+            {pricingMode === 'per_unit' && (
+              <ReadBox
+                label="Total Amount"
+                value={finalAmount > 0 ? formatCurrency(finalAmount) : '—'}
+                highlight={finalAmount > 0}
+              />
             )}
-          </p>
+          </div>
+          {qty > 0 && rate > 0 && (
+            <p className="text-xs text-slate-400 font-mono mt-2.5">
+              {pricingMode === 'per_unit'
+                ? <>{qty} pcs × ₨{rate.toLocaleString('en-PK')} = <span className="text-emerald-600 font-semibold">{formatCurrency(finalAmount)}</span></>
+                : <>{qty} pcs · Total: <span className="text-emerald-600 font-semibold">{formatCurrency(finalAmount)}</span></>
+              }
+              {(designFee > 0 || urgentFee > 0) && (
+                <span className="text-slate-500 ml-2">
+                  · Line total: <span className="font-bold">{formatCurrency(lineTotal)}</span>
+                </span>
+              )}
+            </p>
+          )}
         </div>
       )}
 
-      {/* ── Expanded: description + surcharges ───────────── */}
+      {/* ── Fixed — Amount is the total ───────────────────────── */}
+      {type === 'fixed' && (
+        <div className="px-4 pb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input
+              label="Amount (PKR)"
+              type="number" min="0" step="1" prefix="₨" placeholder="0"
+              size="lg"
+              value={item.rate}
+              onChange={(e) => onUpdate(item.id, { rate: e.target.value })}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ── Expand/collapse for description & surcharges ─────── */}
+      <div className="border-t border-slate-100">
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="w-full flex items-center justify-between px-4 py-2.5 text-xs text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+        >
+          <span className="font-medium">
+            {expanded ? 'Hide' : 'Add'} description &amp; extra fees
+            {(designFee > 0 || urgentFee > 0) && (
+              <span className="ml-2 text-amber-600 font-semibold">
+                +{formatCurrency(designFee + urgentFee)}
+              </span>
+            )}
+          </span>
+          {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </button>
+      </div>
+
       {expanded && (
-        <div className="border-t border-slate-100 bg-slate-50/70 px-3 py-3 grid grid-cols-3 gap-3">
-          <Input
-            label="Description (optional)"
-            placeholder="Overrides item name on invoice"
-            value={item.description}
-            onChange={(e) => onUpdate(item.id, { description: e.target.value })}
-          />
-          <Input
-            label="Design Fee (PKR)"
-            type="number" min="0" prefix="₨"
-            value={item.designFee}
-            onChange={(e) => onUpdate(item.id, { designFee: e.target.value })}
-          />
-          <Input
-            label="Urgent Fee (PKR)"
-            type="number" min="0" prefix="₨"
-            value={item.urgentFee}
-            onChange={(e) => onUpdate(item.id, { urgentFee: e.target.value })}
-          />
+        <div className="border-t border-slate-100 bg-slate-50/70 px-4 pb-4 pt-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Input
+              label="Description (optional)"
+              placeholder="Overrides item name on invoice"
+              size="lg"
+              value={item.description}
+              onChange={(e) => onUpdate(item.id, { description: e.target.value })}
+            />
+            <Input
+              label="Design Fee"
+              type="number" min="0" prefix="₨" placeholder="0"
+              size="lg"
+              value={item.designFee}
+              onChange={(e) => onUpdate(item.id, { designFee: e.target.value })}
+            />
+            <Input
+              label="Urgent Fee"
+              type="number" min="0" prefix="₨" placeholder="0"
+              size="lg"
+              value={item.urgentFee}
+              onChange={(e) => onUpdate(item.id, { urgentFee: e.target.value })}
+            />
+          </div>
         </div>
       )}
     </div>

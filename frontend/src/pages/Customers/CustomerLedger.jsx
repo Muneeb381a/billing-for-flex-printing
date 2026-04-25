@@ -79,8 +79,8 @@ const RecordPaymentModal = ({ bill, customerId, onClose, onSuccess }) => {
 
         {/* Bill snapshot */}
         <div className="px-6 py-3 bg-gray-50 border-b border-gray-100 flex justify-between text-sm">
-          <span className="text-gray-500">Products</span>
-          <span className="font-medium text-gray-800 text-right max-w-48 truncate">{bill.product_summary}</span>
+          <span className="text-gray-500">Items</span>
+          <span className="font-medium text-gray-800 text-right max-w-48 truncate">{bill.category_summary}</span>
         </div>
         <div className="px-6 py-3 bg-gray-50 border-b border-gray-100 flex justify-between text-sm">
           <span className="text-gray-500">Remaining balance</span>
@@ -192,8 +192,8 @@ const BillRow = ({ bill, customerId, onPaymentAdded }) => {
 
         {/* Products */}
         <td className="px-4 py-3">
-          <p className="text-sm text-gray-700 max-w-40 truncate" title={bill.product_summary}>
-            {bill.product_summary}
+          <p className="text-sm text-gray-700 max-w-40 truncate" title={bill.category_summary}>
+            {bill.category_summary}
           </p>
           <StatusBadge status={bill.status} className="mt-0.5" />
         </td>
@@ -553,7 +553,7 @@ const CustomerLedger = () => {
             <thead>
               <tr className="border-b border-gray-100">
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Bill</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Products</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Items</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Total</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Paid</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Balance</th>

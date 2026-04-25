@@ -72,16 +72,16 @@ export const getStockAlerts = () =>
 
 export const getTopProducts = ({ limit = 10, days = 30 } = {}) =>
   pool.query(
-    `SELECT p.id, p.name, cat.name AS category_name,
-            COUNT(bi.id)               AS order_count,
-            SUM(bi.quantity)           AS total_qty,
-            SUM(bi.item_total)         AS total_revenue
+    `SELECT c.id, c.name,
+            COUNT(bi.id)       AS order_count,
+            SUM(bi.quantity)   AS total_qty,
+            SUM(bi.item_total) AS total_revenue
      FROM   bill_items bi
-     JOIN   products   p   ON p.id   = bi.product_id
-     JOIN   categories cat ON cat.id = p.category_id
-     JOIN   bills      b   ON b.id   = bi.bill_id
+     JOIN   categories c ON c.id = bi.category_id
+     JOIN   bills      b ON b.id = bi.bill_id
      WHERE  b.created_at >= NOW() - ($2::integer * INTERVAL '1 day')
-     GROUP  BY p.id, p.name, cat.name
+       AND  bi.category_id IS NOT NULL
+     GROUP  BY c.id, c.name
      ORDER  BY total_revenue DESC
      LIMIT  $1`,
     [limit, days]

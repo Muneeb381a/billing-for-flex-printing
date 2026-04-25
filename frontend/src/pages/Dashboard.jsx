@@ -430,7 +430,6 @@ const Dashboard = () => {
                         </span>
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-bold text-slate-800 truncate leading-tight">{p.name}</p>
-                          <p className="text-[10px] text-slate-400 mt-0.5">{p.category_name}</p>
                         </div>
                         <div className="text-end shrink-0">
                           <p className="text-xs font-black text-emerald-600">{formatCurrency(p.total_revenue)}</p>

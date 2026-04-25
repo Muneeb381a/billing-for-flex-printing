@@ -1,7 +1,7 @@
 {
   "dashboard":         "Dashboard",
   "customers":         "Customers",
-  "products":          "Products",
+  "products":          "Categories",
   "bills":             "Bills",
   "ledger":            "Ledger",
   "reports":           "Reports",
@@ -15,7 +15,7 @@
   "new_bill":          "New Bill",
   "add_customer":      "Add Customer",
   "view_reports":      "View Reports",
-  "manage_products":   "Manage Products",
+  "manage_products":   "Manage Categories",
   "create_order":      "Create a new order",
   "register_client":   "Register a new client",
   "sales_analytics":   "Sales & analytics",
@@ -23,7 +23,7 @@
 
   "active_orders":     "Active Orders",
   "active_orders_sub": "Pending and in-progress — click any bill to open",
-  "top_products":      "Top Products",
+  "top_products":      "Top Categories",
   "top_products_sub":  "Last 30 days by revenue",
   "stock_alerts":      "Stock Alerts",
   "quick_actions":     "Quick Actions",

@@ -14,10 +14,93 @@ import {
 import { formatCurrency } from '../../utils/format.js';
 import * as custApi from '../../api/customers.js';
 import * as billApi from '../../api/bills.js';
+import * as catApi  from '../../api/categories.js';
 import BillItemRow  from './BillItemRow.jsx';
 import BillTotals   from './BillTotals.jsx';
 import CustomerForm from '../Customers/CustomerForm.jsx';
 import cn from '../../utils/cn.js';
+
+const TYPE_MAP = {
+  area_based:     'area',
+  quantity_based: 'quantity',
+  fixed_charge:   'fixed',
+  custom:         'fixed',
+};
+
+// ── Quick-create a category/product from within the bill form ──
+const QuickCategoryForm = ({ onSuccess }) => {
+  const [name,        setName]        = useState('');
+  const [pricingType, setPricingType] = useState('area_based');
+  const [pricingMode, setPricingMode] = useState('total');
+  const [rate,        setRate]        = useState('');
+
+  const mutation = useMutation({
+    mutationFn: () => catApi.createCategory({
+      name:        name.trim(),
+      pricingType,
+      pricingMode: pricingType === 'quantity_based' ? pricingMode : undefined,
+      rate:        rate ? parseFloat(rate) : undefined,
+    }),
+    onSuccess: (res) => onSuccess(res.data),
+    onError:   (err) => toast.error(err.response?.data?.error || err.message),
+  });
+
+  return (
+    <form
+      onSubmit={(e) => { e.preventDefault(); if (name.trim()) mutation.mutate(); }}
+      className="space-y-4"
+    >
+      <Input
+        label="Product / Service Name"
+        placeholder="e.g. Banner Printing, Business Cards…"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        size="lg"
+        autoFocus
+        required
+      />
+      <Select
+        label="Pricing Type"
+        value={pricingType}
+        onChange={(e) => setPricingType(e.target.value)}
+        size="lg"
+        options={[
+          { value: 'area_based',     label: 'Area-based  (W × H × Qty × Rate/sqft)' },
+          { value: 'quantity_based', label: 'Quantity-based  (items × rate or total price)' },
+          { value: 'fixed_charge',   label: 'Fixed charge  (enter total directly)' },
+        ]}
+      />
+      {pricingType === 'quantity_based' && (
+        <Select
+          label="Rate Mode"
+          value={pricingMode}
+          onChange={(e) => setPricingMode(e.target.value)}
+          size="lg"
+          options={[
+            { value: 'total',    label: 'Total price — user enters full job price' },
+            { value: 'per_unit', label: 'Per unit — qty × rate per piece' },
+          ]}
+        />
+      )}
+      <Input
+        label="Default Rate (optional)"
+        type="number" min="0" step="1" prefix="₨" placeholder="0"
+        value={rate}
+        onChange={(e) => setRate(e.target.value)}
+        size="lg"
+      />
+      <Button
+        type="submit"
+        loading={mutation.isPending}
+        disabled={!name.trim() || mutation.isPending}
+        size="lg"
+        className="w-full"
+      >
+        Create &amp; Select Product
+      </Button>
+    </form>
+  );
+};
 
 // ── Predefined charges (quick-add from dropdown) ──────────────
 const PREDEFINED_CHARGES = [
@@ -59,6 +142,8 @@ const BillForm = () => {
   const [advance,          setAdvance]          = useState('');
   const [payMethod,        setPayMethod]        = useState('cash');
   const [quickCustOpen,    setQuickCustOpen]    = useState(false);
+  const [quickCatOpen,     setQuickCatOpen]     = useState(false);
+  const [quickCatRowId,    setQuickCatRowId]    = useState(null);
 
   // Custom bill number
   const [useCustomBillNo, setUseCustomBillNo] = useState(false);
@@ -104,6 +189,27 @@ const BillForm = () => {
     });
     setQuickCustOpen(false);
     toast.success(`${customer.name} added and selected`);
+  };
+
+  const handleQuickCreate = (rowId) => {
+    setQuickCatRowId(rowId);
+    setQuickCatOpen(true);
+  };
+
+  const handleQuickCatCreated = (category) => {
+    qc.invalidateQueries({ queryKey: ['categories'] });
+    if (quickCatRowId) {
+      const newType = TYPE_MAP[category.pricing_type] ?? 'fixed';
+      updateItem(quickCatRowId, {
+        categoryId:  String(category.id),
+        catType:     newType,
+        pricingMode: category.pricing_mode ?? 'total',
+        width: '', height: '', quantity: 1, sqft: null, rate: '',
+      });
+    }
+    setQuickCatOpen(false);
+    setQuickCatRowId(null);
+    toast.success(`"${category.name}" created and selected`);
   };
 
   const updateItem   = (id, patch) => setItems((p) => p.map((it) => it.id === id ? { ...it, ...patch } : it));
@@ -406,11 +512,11 @@ const BillForm = () => {
                   </p>
                 </div>
                 <Button type="button" size="sm" variant="secondary" icon={<Plus size={13} />} onClick={addItem}>
-                  Add Row
+                  Add Item
                 </Button>
               </div>
 
-              <div className="px-3 py-3 space-y-2">
+              <div className="px-3 py-3 space-y-3">
                 {items.map((item, i) => (
                   <BillItemRow
                     key={item.id}
@@ -418,13 +524,25 @@ const BillForm = () => {
                     index={i}
                     onUpdate={updateItem}
                     onRemove={removeItem}
+                    onQuickCreate={handleQuickCreate}
                   />
                 ))}
                 {items.length === 0 && (
                   <div className="text-center py-12 text-slate-300 text-sm border-2 border-dashed border-slate-100 rounded-2xl">
-                    No items yet — click "Add Row" to start
+                    No items yet — click below to start
                   </div>
                 )}
+              </div>
+
+              <div className="px-3 pb-4">
+                <button
+                  type="button"
+                  onClick={addItem}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 border-2 border-dashed border-slate-200 hover:border-brand-400 hover:bg-brand-50 rounded-xl text-sm font-semibold text-slate-400 hover:text-brand-600 transition-all cursor-pointer group"
+                >
+                  <Plus size={16} className="group-hover:text-brand-600 transition-colors" />
+                  Add Another Item
+                </button>
               </div>
             </Card>
 
@@ -678,6 +796,10 @@ const BillForm = () => {
 
       <Modal isOpen={quickCustOpen} onClose={() => setQuickCustOpen(false)} title="Add New Customer" size="sm">
         <CustomerForm onSuccess={handleCustomerCreated} />
+      </Modal>
+
+      <Modal isOpen={quickCatOpen} onClose={() => { setQuickCatOpen(false); setQuickCatRowId(null); }} title="Add New Product" size="sm">
+        {quickCatOpen && <QuickCategoryForm onSuccess={handleQuickCatCreated} />}
       </Modal>
     </div>
   );

@@ -6,14 +6,98 @@ import pool from '../config/db.js';
 const router = Router();
 
 // ── GET /api/ledger ───────────────────────────────────────────
-// All customers with computed financial summary.
-// Ordered by outstanding balance descending (highest risk first).
+// Bill-level ledger across all customers.
+// Supports search (bill#, customer name/phone), paymentStatus filter,
+// and from/to date range.  Returns summary totals + paginated bill rows.
+//
+// Performance note: the category_summary correlated subquery runs once
+// per bill but is indexed by bill_id, so it stays fast even at thousands
+// of bills. The summary query hits only the customer_ledger view (aggregated).
 
-router.get('/', asyncWrap(async (_req, res) => {
-  const { rows } = await pool.query(
-    `SELECT * FROM customer_ledger ORDER BY outstanding_balance DESC`
-  );
-  res.json({ data: rows });
+router.get('/', asyncWrap(async (req, res) => {
+  const { search = '', paymentStatus, from, to, limit = 200, offset = 0 } = req.query;
+
+  const q        = search.trim() ? `%${search.trim()}%` : null;
+  const status   = paymentStatus || null;
+  const fromDate = from || null;
+  const toDate   = to   || null;
+
+  const [{ rows: summary }, { rows: bills }] = await Promise.all([
+    // Overall financial totals (not filtered — always reflects full book)
+    pool.query(
+      `SELECT
+         COALESCE(SUM(total_billed),       0) AS total_billed,
+         COALESCE(SUM(total_paid),         0) AS total_paid,
+         COALESCE(SUM(outstanding_balance),0) AS total_outstanding
+       FROM customer_ledger`
+    ),
+
+    // Bill-level rows with customer name and category summary
+    pool.query(
+      `SELECT
+         b.id,
+         b.bill_number,
+         b.status,
+         b.total_amount,
+         b.advance_paid,
+         b.remaining_balance,
+         b.created_at,
+         b.due_date,
+         c.id    AS customer_id,
+         c.name  AS customer_name,
+         c.phone,
+
+         -- Category names for all items in this bill (no product table)
+         (
+           SELECT COALESCE(STRING_AGG(DISTINCT cat.name, ', ' ORDER BY cat.name), '—')
+           FROM   bill_items bi
+           JOIN   categories cat ON cat.id = bi.category_id
+           WHERE  bi.bill_id = b.id
+         ) AS category_summary,
+
+         -- Payment status derived from remaining balance
+         CASE
+           WHEN b.remaining_balance <= 0 THEN 'paid'
+           WHEN b.advance_paid        > 0 THEN 'partial'
+           ELSE                                'unpaid'
+         END AS payment_status,
+
+         -- Overdue: still has balance AND past due date (default: 30 days)
+         CASE
+           WHEN b.remaining_balance > 0
+            AND COALESCE(b.due_date,
+                         (b.created_at + INTERVAL '30 days')::date
+                ) < CURRENT_DATE
+           THEN TRUE ELSE FALSE
+         END AS is_overdue,
+
+         -- Days since bill creation (unpaid bills only)
+         CASE
+           WHEN b.remaining_balance > 0
+           THEN (CURRENT_DATE - DATE(b.created_at))
+         END AS days_outstanding
+
+       FROM   bills b
+       JOIN   customers c ON c.id = b.customer_id
+
+       WHERE  ($1::text IS NULL
+               OR c.name ILIKE $1 OR c.phone ILIKE $1 OR b.bill_number ILIKE $1)
+         AND  ($2::text IS NULL OR
+               CASE
+                 WHEN b.remaining_balance <= 0 THEN 'paid'
+                 WHEN b.advance_paid        > 0 THEN 'partial'
+                 ELSE                                'unpaid'
+               END = $2)
+         AND  ($3::date IS NULL OR DATE(b.created_at) >= $3)
+         AND  ($4::date IS NULL OR DATE(b.created_at) <= $4)
+
+       ORDER  BY b.created_at DESC
+       LIMIT  $5 OFFSET $6`,
+      [q, status, fromDate, toDate, Number(limit), Number(offset)]
+    ),
+  ]);
+
+  res.json({ summary: summary[0], data: bills });
 }));
 
 // ── GET /api/ledger/:customerId ───────────────────────────────
@@ -91,13 +175,13 @@ router.get('/:id', validateId, asyncWrap(async (req, res, next) => {
           ) ORDER BY p.payment_date ASC
         ) FILTER (WHERE p.id IS NOT NULL) AS payments,
 
-        -- Product summary for this bill (one correlated subquery per bill)
+        -- Category summary for this bill — joins categories directly, no product table
         (
-          SELECT COALESCE(STRING_AGG(DISTINCT pr.name, ', ' ORDER BY pr.name), '—')
+          SELECT COALESCE(STRING_AGG(DISTINCT cat.name, ', ' ORDER BY cat.name), '—')
           FROM   bill_items bi
-          JOIN   products pr ON pr.id = bi.product_id
+          JOIN   categories cat ON cat.id = bi.category_id
           WHERE  bi.bill_id = b.id
-        ) AS product_summary,
+        ) AS category_summary,
 
         -- Payment status: derived, never stored
         CASE

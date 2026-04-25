@@ -1,7 +1,7 @@
 {
   "dashboard":         "ڈیش بورڈ",
   "customers":         "گاہک",
-  "products":          "مصنوعات",
+  "products":          "اقسام",
   "bills":             "بل",
   "ledger":            "کھاتہ",
   "reports":           "رپورٹس",
@@ -15,7 +15,7 @@
   "new_bill":          "نیا بل",
   "add_customer":      "گاہک شامل کریں",
   "view_reports":      "رپورٹس دیکھیں",
-  "manage_products":   "مصنوعات",
+  "manage_products":   "اقسام منظم کریں",
   "create_order":      "نیا آرڈر بنائیں",
   "register_client":   "نیا گاہک رجسٹر کریں",
   "sales_analytics":   "فروخت اور تجزیہ",
@@ -23,7 +23,7 @@
 
   "active_orders":     "فعال آرڈرز",
   "active_orders_sub": "زیر التواء اور جاری — کسی بل پر کلک کریں",
-  "top_products":      "بہترین مصنوعات",
+  "top_products":      "بہترین اقسام",
   "top_products_sub":  "گزشتہ ۳۰ دن کی آمدنی کے مطابق",
   "stock_alerts":      "ذخیرہ الرٹس",
   "quick_actions":     "فوری اعمال",

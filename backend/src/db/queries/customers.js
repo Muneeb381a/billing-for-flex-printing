@@ -3,10 +3,17 @@ import pool from '../../config/db.js';
 export const findAll = ({ search = '', limit = 50, offset = 0 } = {}) => {
   const term = `%${search}%`;
   return pool.query(
-    `SELECT id, name, phone, email, address, discount_type, discount_percentage, created_at
-     FROM   customers
-     WHERE  ($1 = '' OR name ILIKE $1 OR phone ILIKE $1)
-     ORDER  BY name ASC
+    `SELECT
+       c.id, c.name, c.phone, c.email, c.address,
+       c.discount_type, c.discount_percentage, c.created_at,
+       COALESCE(cl.total_bills,         0)::int AS total_bills,
+       COALESCE(cl.total_billed,        0)      AS total_billed,
+       COALESCE(cl.total_paid,          0)      AS total_paid,
+       COALESCE(cl.outstanding_balance, 0)      AS outstanding_balance
+     FROM   customers c
+     LEFT   JOIN customer_ledger cl ON cl.customer_id = c.id
+     WHERE  ($1 = '' OR c.name ILIKE $1 OR c.phone ILIKE $1)
+     ORDER  BY c.name ASC
      LIMIT  $2 OFFSET $3`,
     [term, limit, offset]
   );
