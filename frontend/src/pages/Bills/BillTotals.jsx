@@ -59,8 +59,7 @@ const BillTotals = ({
             <Select
               label="Discount Type"
               options={[
-                { value: 'fixed',      label: 'Fixed Amount (PKR)' },
-                { value: 'percentage', label: 'Percentage (%)' },
+                { value: 'fixed',      label: 'Fixed Amount (PKR)' }
               ]}
               value={discountType}
               onChange={(e) => onDiscountTypeChange?.(e.target.value)}

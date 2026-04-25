@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import {
   Plus, Save, ArrowLeft, Trash2, UserPlus, FileText,
   Hash, CheckCircle, XCircle, Loader, ChevronDown, Zap,
+  Package, Layers, Maximize2, Receipt,
 } from 'lucide-react';
 import {
   Input, Select, Textarea, Button, Card, PageHeader, Modal,
@@ -35,8 +36,8 @@ const newItem = () => ({
   id: crypto.randomUUID(),
   categoryId: '',
   description: '', width: '', height: '',
-  quantity: 1, unitPrice: '', sqft: null,
-  itemTotal: 0, designFee: 0, urgentFee: 0,
+  quantity: 1, sqft: null,
+  amount: '', designFee: 0, urgentFee: 0,
 });
 
 const BillNumberStatus = ({ status }) => {
@@ -119,10 +120,25 @@ const BillForm = () => {
   const removeCharge = (id) =>
     setExtraCharges((p) => p.filter((ec) => ec.id !== id));
 
-  // ── Live totals (mirror BillTotals logic) ─────────────────────
+  // ── Live totals ───────────────────────────────────────────────
   const subtotal = useMemo(
     () => items.reduce((s, it) =>
-      s + parseFloat(it.itemTotal || 0) + parseFloat(it.designFee || 0) + parseFloat(it.urgentFee || 0), 0),
+      s + (parseFloat(it.amount || 0)) + (parseFloat(it.designFee || 0)) + (parseFloat(it.urgentFee || 0)), 0),
+    [items],
+  );
+
+  // Summary card values
+  const totalItems    = items.length;
+  const totalQuantity = useMemo(
+    () => items.reduce((s, it) => s + (parseInt(it.quantity, 10) || 0), 0),
+    [items],
+  );
+  const totalSqft = useMemo(
+    () => parseFloat(items.reduce((s, it) => s + (parseFloat(it.sqft || 0)), 0).toFixed(3)),
+    [items],
+  );
+  const totalBillAmount = useMemo(
+    () => items.reduce((s, it) => s + (parseFloat(it.amount || 0)), 0),
     [items],
   );
 
@@ -169,8 +185,8 @@ const BillForm = () => {
     }
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
-      if (!it.categoryId)    return `Row ${i + 1}: select an item`;
-      if (it.itemTotal <= 0) return `Row ${i + 1}: enter dimensions / quantity to calculate price`;
+      if (!it.categoryId)                    return `Row ${i + 1}: select an item`;
+      if (parseFloat(it.amount || 0) <= 0)   return `Row ${i + 1}: enter an amount`;
     }
     for (const ec of extraCharges) {
       if (!ec.label)  return 'Extra charge label is required';
@@ -193,14 +209,14 @@ const BillForm = () => {
         advance:       parseFloat(advance || 0),
         paymentMethod: payMethod,
         items: items.map((it) => ({
-          categoryId:   Number(it.categoryId),
-          description:  it.description || undefined,
-          width:        it.width  ? parseFloat(it.width)  : undefined,
-          height:       it.height ? parseFloat(it.height) : undefined,
-          quantity:     parseInt(it.quantity, 10),
-          unitPrice:    parseFloat(it.unitPrice || 0),
-          designFee:    parseFloat(it.designFee || 0),
-          urgentFee:    parseFloat(it.urgentFee || 0),
+          categoryId:  Number(it.categoryId),
+          description: it.description || undefined,
+          width:       it.width  ? parseFloat(it.width)  : undefined,
+          height:      it.height ? parseFloat(it.height) : undefined,
+          quantity:    parseInt(it.quantity, 10) || 1,
+          amount:      parseFloat(it.amount || 0),
+          designFee:   parseFloat(it.designFee || 0),
+          urgentFee:   parseFloat(it.urgentFee || 0),
         })),
         extraCharges: extraCharges.map((ec) => ({
           label:  ec.label,
@@ -223,7 +239,7 @@ const BillForm = () => {
     <div className="max-w-[1400px] mx-auto">
       <PageHeader
         title="New Bill"
-        subtitle="POS — prices calculate automatically as you type"
+        subtitle="Enter dimensions → sqft is auto-calculated · set amount manually"
         action={
           <Button variant="ghost" size="sm" icon={<ArrowLeft size={15} />} onClick={() => navigate('/bills')}>
             Back
@@ -394,6 +410,57 @@ const BillForm = () => {
                 )}
               </div>
             </Card>
+
+            {/* ── Summary Cards ── */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                {
+                  icon: Layers,
+                  label: 'Total Items',
+                  value: totalItems,
+                  unit: totalItems === 1 ? 'row' : 'rows',
+                  color: 'text-indigo-600',
+                  bg: 'bg-indigo-50',
+                },
+                {
+                  icon: Package,
+                  label: 'Total Quantity',
+                  value: totalQuantity,
+                  unit: 'pcs',
+                  color: 'text-emerald-600',
+                  bg: 'bg-emerald-50',
+                },
+                {
+                  icon: Maximize2,
+                  label: 'Total Sqft',
+                  value: totalSqft || '—',
+                  unit: totalSqft ? 'sqft' : '',
+                  color: 'text-amber-600',
+                  bg: 'bg-amber-50',
+                },
+                {
+                  icon: Receipt,
+                  label: 'Total Bill',
+                  value: formatCurrency(totalBillAmount),
+                  unit: '',
+                  color: 'text-brand-700',
+                  bg: 'bg-brand-50',
+                },
+              ].map(({ icon: Icon, label, value, unit, color, bg }) => (
+                <div key={label} className="bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm flex items-start gap-3">
+                  <div className={`w-8 h-8 rounded-lg ${bg} flex items-center justify-center shrink-0 mt-0.5`}>
+                    <Icon size={15} className={color} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs text-slate-400 font-medium">{label}</p>
+                    <p className="text-base font-black text-slate-900 leading-tight mt-0.5 tabular-nums">
+                      {value}
+                      {unit && <span className="text-xs font-medium text-slate-400 ml-1">{unit}</span>}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
 
             {/* ── Extra Charges ── */}
             <Card>
