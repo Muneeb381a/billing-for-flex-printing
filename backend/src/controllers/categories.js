@@ -4,6 +4,7 @@ import pool from '../config/db.js';
 import { createError } from '../middleware/errorHandler.js';
 
 const PRICING_TYPES = ['area_based', 'quantity_based', 'fixed_charge', 'custom'];
+const PRICING_MODES = ['per_unit', 'total'];
 const UNITS         = ['sqft', 'pcs', 'set', 'sheet', 'm2'];
 
 export const getAll = async (req, res) => {
@@ -19,10 +20,12 @@ export const getById = async (req, res, next) => {
 };
 
 export const create = async (req, res, next) => {
-  const { name, description, pricingType, rate, unit, minSqft, sortOrder } = req.body;
+  const { name, description, pricingType, pricingMode, rate, unit, minSqft, sortOrder } = req.body;
   if (!name?.trim()) return next(createError(400, 'name is required'));
   if (pricingType && !PRICING_TYPES.includes(pricingType))
     return next(createError(400, `pricingType must be one of: ${PRICING_TYPES.join(', ')}`));
+  if (pricingMode && !PRICING_MODES.includes(pricingMode))
+    return next(createError(400, `pricingMode must be one of: ${PRICING_MODES.join(', ')}`));
 
   const slug = slugify(name);
   const existing = await Q.findBySlug(slug);
@@ -30,27 +33,31 @@ export const create = async (req, res, next) => {
 
   const { rows } = await Q.create({
     name: name.trim(), slug, description,
-    pricingType: pricingType || 'area_based',
-    rate:     rate     != null ? parseFloat(rate)     : null,
-    unit:     unit     || 'sqft',
-    minSqft:  minSqft  != null ? parseFloat(minSqft)  : 1,
-    sortOrder: sortOrder != null ? parseInt(sortOrder) : 0,
+    pricingType:  pricingType  || 'area_based',
+    pricingMode:  pricingMode  || 'total',
+    rate:         rate     != null ? parseFloat(rate)    : null,
+    unit:         unit     || 'sqft',
+    minSqft:      minSqft  != null ? parseFloat(minSqft) : 1,
+    sortOrder:    sortOrder != null ? parseInt(sortOrder) : 0,
   });
   res.status(201).json({ data: rows[0] });
 };
 
 export const update = async (req, res, next) => {
-  const { name, description, isActive, pricingType, rate, unit, minSqft, sortOrder } = req.body;
+  const { name, description, isActive, pricingType, pricingMode, rate, unit, minSqft, sortOrder } = req.body;
   if (pricingType && !PRICING_TYPES.includes(pricingType))
     return next(createError(400, `pricingType must be one of: ${PRICING_TYPES.join(', ')}`));
+  if (pricingMode && !PRICING_MODES.includes(pricingMode))
+    return next(createError(400, `pricingMode must be one of: ${PRICING_MODES.join(', ')}`));
 
   const slug = name ? slugify(name) : undefined;
   const { rows } = await Q.update(req.params.id, {
     name, slug, description, isActive, pricingType,
-    rate:     rate     != null ? parseFloat(rate)    : undefined,
+    pricingMode: pricingMode || undefined,
+    rate:        rate     != null ? parseFloat(rate)    : undefined,
     unit,
-    minSqft:  minSqft  != null ? parseFloat(minSqft) : undefined,
-    sortOrder: sortOrder != null ? parseInt(sortOrder): undefined,
+    minSqft:     minSqft  != null ? parseFloat(minSqft) : undefined,
+    sortOrder:   sortOrder != null ? parseInt(sortOrder) : undefined,
   });
   if (!rows.length) return next(createError(404, 'Category not found'));
   res.json({ data: rows[0] });

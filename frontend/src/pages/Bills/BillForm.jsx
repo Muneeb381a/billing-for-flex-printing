@@ -34,7 +34,7 @@ const PREDEFINED_CHARGES = [
 
 const newItem = () => ({
   id: crypto.randomUUID(),
-  categoryId: '', catType: '',
+  categoryId: '', catType: '', pricingMode: 'total',
   description: '', width: '', height: '',
   quantity: 1, sqft: null,
   rate: '', designFee: 0, urgentFee: 0,
@@ -120,11 +120,15 @@ const BillForm = () => {
   const removeCharge = (id) =>
     setExtraCharges((p) => p.filter((ec) => ec.id !== id));
 
-  // ── Live totals — dispatches by catType, never NaN ──────────
+  // ── Live totals — dispatches by catType + pricingMode, never NaN
   const rowFinal = (it) => {
     const rate = Number(it.rate) || 0;
-    if (it.catType === 'area')     return parseFloat(((Number(it.sqft) || 0) * rate).toFixed(2));
-    if (it.catType === 'quantity') return parseFloat(((parseInt(it.quantity, 10) || 1) * rate).toFixed(2));
+    if (it.catType === 'area') return parseFloat(((Number(it.sqft) || 0) * rate).toFixed(2));
+    if (it.catType === 'quantity') {
+      return (it.pricingMode ?? 'total') === 'per_unit'
+        ? parseFloat(((parseInt(it.quantity, 10) || 1) * rate).toFixed(2))
+        : rate; // total mode — rate IS the whole job price
+    }
     return rate; // fixed — rate IS the amount
   };
 

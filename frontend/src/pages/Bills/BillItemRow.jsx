@@ -59,8 +59,10 @@ const BillItemRow = ({ item, index, onUpdate, onRemove }) => {
   const categories = allCats.map((c) => ({ value: String(c.id), label: c.name }));
   const selectedCat = allCats.find((c) => String(c.id) === String(item.categoryId));
 
-  // Derive type from the selected category's pricing_type
-  const type = TYPE_MAP[selectedCat?.pricing_type] ?? null;
+  // Derive type and pricing_mode from the selected category
+  const type        = TYPE_MAP[selectedCat?.pricing_type] ?? null;
+  // pricing_mode only matters for quantity type; default 'total' per spec
+  const pricingMode = selectedCat?.pricing_mode ?? 'total';
 
   // ── Per-type derived values (never NaN) ──────────────────
   const qty  = parseInt(item.quantity, 10) || 1;
@@ -69,9 +71,14 @@ const BillItemRow = ({ item, index, onUpdate, onRemove }) => {
 
   const finalAmount = (() => {
     if (!type) return 0;
-    if (type === 'area')     return parseFloat((sqft * rate).toFixed(2));
-    if (type === 'quantity') return parseFloat((qty  * rate).toFixed(2));
-    return rate; // fixed — rate field IS the amount
+    if (type === 'area') return parseFloat((sqft * rate).toFixed(2));
+    if (type === 'quantity') {
+      // per_unit: qty × rate   |   total: rate is the whole job price
+      return pricingMode === 'per_unit'
+        ? parseFloat((qty * rate).toFixed(2))
+        : rate;
+    }
+    return rate; // fixed — rate IS the amount
   })();
 
   const designFee = Number(item.designFee) || 0;
@@ -83,11 +90,13 @@ const BillItemRow = ({ item, index, onUpdate, onRemove }) => {
 
   // ── Handle category selection ─────────────────────────────
   const handleCategoryChange = (e) => {
-    const cat     = allCats.find((c) => String(c.id) === e.target.value);
-    const newType = TYPE_MAP[cat?.pricing_type] ?? 'fixed';
+    const cat            = allCats.find((c) => String(c.id) === e.target.value);
+    const newType        = TYPE_MAP[cat?.pricing_type] ?? 'fixed';
+    const newPricingMode = cat?.pricing_mode ?? 'total';
     onUpdate(item.id, {
-      categoryId: e.target.value,
-      catType:    newType,
+      categoryId:  e.target.value,
+      catType:     newType,
+      pricingMode: newPricingMode,
       // reset all measure fields so stale values don't bleed across types
       width: '', height: '', quantity: 1, sqft: null, rate: '',
     });
@@ -210,7 +219,7 @@ const BillItemRow = ({ item, index, onUpdate, onRemove }) => {
         </div>
       )}
 
-      {/* ── TYPE: quantity — Qty × Rate → Total ─────────── */}
+      {/* ── TYPE: quantity ────────────────────────────────── */}
       {type === 'quantity' && (
         <div className="flex gap-2 items-end px-3 pb-2.5 ml-7">
           <div className="w-28 shrink-0">
@@ -221,21 +230,26 @@ const BillItemRow = ({ item, index, onUpdate, onRemove }) => {
               onChange={(e) => onUpdate(item.id, { quantity: e.target.value })}
             />
           </div>
-          <div className="w-32 shrink-0">
+          <div className="w-36 shrink-0">
             <Input
-              label={showLabel ? 'Rate / item' : undefined}
+              label={showLabel
+                ? (pricingMode === 'per_unit' ? 'Rate / item' : 'Total Amount')
+                : undefined}
               type="number" min="0" step="1" prefix="₨" placeholder="0"
               value={item.rate}
               onChange={(e) => onUpdate(item.id, { rate: e.target.value })}
             />
           </div>
-          <ReadBox
-            label="Total Amount"
-            value={finalAmount > 0 ? formatCurrency(finalAmount) : '—'}
-            highlight={finalAmount > 0}
-            showLabel={showLabel}
-            wide
-          />
+          {/* Show computed total only in per_unit mode (in total mode, input IS the total) */}
+          {pricingMode === 'per_unit' && (
+            <ReadBox
+              label="Total Amount"
+              value={finalAmount > 0 ? formatCurrency(finalAmount) : '—'}
+              highlight={finalAmount > 0}
+              showLabel={showLabel}
+              wide
+            />
+          )}
           <ExpandBtn />
         </div>
       )}
@@ -273,8 +287,16 @@ const BillItemRow = ({ item, index, onUpdate, onRemove }) => {
       {type === 'quantity' && qty > 0 && rate > 0 && (
         <div className="px-3 pb-2.5 ml-7">
           <p className="text-[11px] text-slate-400 font-mono">
-            {qty} pcs × ₨{rate.toLocaleString('en-PK')} ={' '}
-            <span className="text-emerald-600 font-semibold">{formatCurrency(finalAmount)}</span>
+            {pricingMode === 'per_unit'
+              ? <>
+                  {qty} pcs × ₨{rate.toLocaleString('en-PK')} ={' '}
+                  <span className="text-emerald-600 font-semibold">{formatCurrency(finalAmount)}</span>
+                </>
+              : <>
+                  {qty} pcs · Total:{' '}
+                  <span className="text-emerald-600 font-semibold">{formatCurrency(finalAmount)}</span>
+                </>
+            }
             {(designFee > 0 || urgentFee > 0) && (
               <span className="text-slate-500 ml-2">
                 · Line: <span className="font-bold">{formatCurrency(lineTotal)}</span>
